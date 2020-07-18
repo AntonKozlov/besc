@@ -1,0 +1,1 @@
+clang hellollvm.cpp -L/usr/lib/llvm-6.0/lib -lLLVM-6.0 -lstdc++ -o hellollvm
