@@ -17,8 +17,7 @@ enum class VertexState {
 };
 
 map<BasicBlock *, VertexState> states;
-map<BasicBlock *, vector < BasicBlock * >>
-graph;
+map<BasicBlock *, vector < BasicBlock * >> graph;
 
 bool cycle_found = false;
 
@@ -47,7 +46,6 @@ struct BranchInstVisitor : public InstVisitor<BranchInstVisitor> {
             if (graph.find(from) == graph.end()) {
                 vector < BasicBlock * > adj = {to};
                 graph.insert(make_pair(from, adj));
-                states[from] = VertexState::NotVisited;
             } else {
                 graph[from].push_back(to);
             }
@@ -70,21 +68,27 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    // Visit all the branch instructions and build an oriented graph
+    // Visit all the branch instances and build an oriented graph
     BranchInstVisitor BIV;
     BIV.visit(*Mod);
 
-    // Launch DFS to find a cycle
+    // Prepare states of vertices (colors)
     for (auto const&[v, _] : graph) {
-        if (states[v] == VertexState::NotVisited) {
-            dfs(v);
+        states[vertex] = VertexState::NotVisited;
+    }
+
+    // Launch DFS to find a cycle
+    for (auto const&[vertex, _] : graph) {
+        if (states[vertex] == VertexState::NotVisited) {
+            dfs(vertex);
+            if (cycle_found) break;
         }
     }
 
     if (cycle_found) {
-        cout << "Found cycles.\n" << endl;
+        cout << "Found branch cycle.\n" << endl;
     } else {
-        cout << "Cycles were not found.\n" << endl;
+        cout << "Branch cycles were not found.\n" << endl;
     }
 
     return 0;
