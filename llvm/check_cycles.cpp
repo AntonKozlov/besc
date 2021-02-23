@@ -17,7 +17,8 @@ enum class VertexState {
 };
 
 map<BasicBlock *, VertexState> states;
-map<BasicBlock *, vector < BasicBlock * >> graph;
+map<BasicBlock *, vector < BasicBlock * >>
+graph;
 
 bool cycle_found = false;
 
@@ -39,10 +40,10 @@ struct BranchInstVisitor : public InstVisitor<BranchInstVisitor> {
 
     void visitBranchInst(BranchInst &BI) {
         count++;
-        cerr << "BranchInst found: " << count << "\n";
+        cout << "BranchInst found: " << count << "\n";
         for (unsigned i = 0; i < BI.getNumSuccessors(); i++) {
             BasicBlock *from = BI.getParent(), *to = BI.getSuccessor(i);
-            cerr << from << " -> " << to << endl;
+            cout << from << " -> " << to << endl;
             if (graph.find(from) == graph.end()) {
                 vector < BasicBlock * > adj = {to};
                 graph.insert(make_pair(from, adj));
@@ -73,7 +74,7 @@ int main(int argc, char **argv) {
     BIV.visit(*Mod);
 
     // Prepare states of vertices (colors)
-    for (auto const&[v, _] : graph) {
+    for (auto const&[vertex, _] : graph) {
         states[vertex] = VertexState::NotVisited;
     }
 
@@ -81,7 +82,8 @@ int main(int argc, char **argv) {
     for (auto const&[vertex, _] : graph) {
         if (states[vertex] == VertexState::NotVisited) {
             dfs(vertex);
-            if (cycle_found) break;
+            if (cycle_found)
+                break;
         }
     }
 
