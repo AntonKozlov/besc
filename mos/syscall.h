@@ -1,13 +1,12 @@
 #pragma once
 
+typedef void (*entry_t)(void *ctx);
+
 #define SYSCALL_X(x) \
-	x(write, int, 3, int, fd, const char*, buf, int, len) \
-	x(read, int, 3, int, fd, char*, buf, int, len) \
-	x(open, int, 1, const char*, path) \
-	x(fork, int, 0) \
-	x(exec, int, 2, const char*, path, char *const *, argv) \
-	x(waitpid, int, 2, int, pid, int*, codeptr) \
-	x(exit, int, 1, int, code) \
+	x(sleep, int, 1, int, ms) \
+	x(clone, int, 2, entry_t, fn, void*, arg) \
+	x(wait,  int, 2, int, pid, int*, codeptr) \
+	x(exit,  int, 1, int, code) \
 
 #define SC_NR(name, ...) os_syscall_nr_ ## name,
 enum syscalls_num {

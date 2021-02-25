@@ -4,11 +4,10 @@
 #include "pool.h"
 
 void pool_init(struct pool *p, void *mem, unsigned long nmemb, unsigned long membsz) {
-	p->mem = mem;
-	p->membsz = membsz;
 	p->freestart = mem;
+	p->membsz = membsz;
 	p->freeend = p->freestart + nmemb * membsz;
-	SLIST_INIT(&p->freehead);
+	p->freehead = NULL;
 }
 
 void *pool_alloc(struct pool *p) {
@@ -18,9 +17,9 @@ void *pool_alloc(struct pool *p) {
 		return r;
 	}
 
-	struct pool_free_block *fb = SLIST_FIRST(&p->freehead);
+	struct pool_free_block *fb = p->freehead;
 	if (fb) {
-		SLIST_REMOVE_HEAD(&p->freehead, next);
+		p->freehead = fb->next;
 		return fb;
 	}
 
@@ -28,5 +27,7 @@ void *pool_alloc(struct pool *p) {
 }
 
 void pool_free(struct pool *p, void *ptr) {
-	SLIST_INSERT_HEAD(&p->freehead, (struct pool_free_block*)ptr, next);
+	struct pool_free_block *fb = ptr;
+	fb->next = p->freehead;
+	p->freehead = fb;
 }

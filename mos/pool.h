@@ -7,23 +7,21 @@ struct pool_free_block {
 };
 
 struct pool {
-	char *mem;
-	unsigned long membsz;
 	char *freestart;
+	unsigned long membsz;
 	char *freeend;
 	struct pool_free_block *freehead;
 };
 
-#define POOL_INITIALIZER(_pool, _mem, _nmemb, _membsz) { \
-	.mem = (char*)(_mem), \
+#define POOL_INITIALIZER(_mem, _nmemb, _membsz) { \
 	.membsz	= (_membsz), \
 	.freehead = NULL, \
 	.freestart = (char*)(_mem), \
 	.freeend = (char*)(_mem) + (_nmemb) * (_membsz), \
 }
 
-#define POOL_INITIALIZER_ARRAY(_pool, _array) \
-	POOL_INITIALIZER(_pool, _array, ARRAY_SIZE(_array), sizeof((_array)[0]));
+#define POOL_INITIALIZER_ARRAY(_array) \
+	POOL_INITIALIZER(_array, ARRAY_SIZE(_array), sizeof((_array)[0]));
 
 void pool_init(struct pool *p, void *mem, unsigned long nmemb, unsigned long membsz);
 
