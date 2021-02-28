@@ -10,7 +10,9 @@ int main() {
         }
     } else {
         a = 6;
+        besc_tracepoint_4();
     }
     besc_tracepoint_2();
+    besc_tracepoint_5();
     return 0;
 }
