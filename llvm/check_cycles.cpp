@@ -39,6 +39,9 @@ BasicBlock *start_bb, *final_bb;
 map<BasicBlock *, vector < BasicBlock * >> graph;
 map<TracePoint, BasicBlock * > block_with_tp;
 map<BasicBlock *, DfsStatus> status;
+map<BasicBlock *, int> ind;
+int amt_inds = 0;
+vector<BasicBlock * > dfs_stack;
 
 ostream& operator<<(ostream& out, const SearchingState state){
     string str;
@@ -60,14 +63,28 @@ ostream& operator<<(ostream& out, const SearchingState state){
 }
 
 void dfs(BasicBlock *bb) {
-    if (bb == final_bb)
+    if (bb == final_bb) {
+        //cout << "! " << ind[bb] << endl;
+        status[bb].reached_final_tp = true;
+        status[bb].visited = true;
         return;
+    }
+    //cout << "> " << ind[bb] << endl;
     status[bb].not_visited = false;
+    dfs_stack.push_back(bb);
     for (auto to : graph[bb]) {
+        //cout << "? " << ind[to] << " <- " << ind[bb] << endl;
         if (status[to].not_visited) {
+            //cout << "v" << endl;
             dfs(to);
         } else if ( ! status[to].visited) {
-            status[bb].loop_found = true;
+            //cout << "c (";
+            for (auto w = dfs_stack.rbegin(); *w != to; w++) {
+                status[*w].loop_found = true;
+                //cout << ind[*w] << ", ";
+            }
+            status[to].loop_found = true;
+            //cout << ind[to] << ")" << endl;
         }
         if (status[to].visited) {
             if (status[to].reached_final_tp) {
@@ -79,7 +96,13 @@ void dfs(BasicBlock *bb) {
             }
         }
     }
+    dfs_stack.pop_back();
     status[bb].visited = true;
+    //cout << "< " << ind[bb] << " (";
+    //if (status[bb].loop_found) //cout << "loop_found, ";
+    //if (status[bb].reached_final_tp) //cout << "reached_final_tp, ";
+    //if (status[bb].always_reached_final_tp) //cout << "always_reached_final_tp, ";
+    //cout << ")" << endl;
 }
 
 SearchingState findLoopInTrace() {
@@ -93,8 +116,7 @@ SearchingState findLoopInTrace() {
     
     for (auto [block, _] : graph)
         status[block] = DfsStatus();
-    
-    status[final_bb].reached_final_tp = true;
+    dfs_stack = {};
 
     dfs(start_bb);
     
@@ -114,20 +136,22 @@ struct BranchInstVisitor : public InstVisitor<BranchInstVisitor> {
 
     void visitBranchInst(BranchInst &BI) {
         count++;
-        cout << "BranchInst found: " << count << "\n";
+        //cout << "BranchInst found: " << count << "\n";
         for (unsigned i = 0; i < BI.getNumSuccessors(); i++) {
             BasicBlock *from = BI.getParent(), *to = BI.getSuccessor(i);
-            cout << from << " -> " << to << endl;
             if (graph.find(from) == graph.end()) {
                 vector < BasicBlock * > adj = {to};
                 graph.insert(make_pair(from, adj));
+                ind[from] = ++amt_inds;
             } else {
                 graph[from].push_back(to);
             }
             if (graph.find(to) == graph.end()) {
                 vector < BasicBlock * > adj = {};
                 graph.insert(make_pair(to, adj));
+                ind[to] = ++amt_inds;
             }
+            //cout << ind[from] << " -> " << ind[to] << endl;
         }
     }
 
@@ -137,7 +161,6 @@ struct BranchInstVisitor : public InstVisitor<BranchInstVisitor> {
         if (name_fun.substr(0, name_fun_tp_len) == name_fun_tp) {
             TracePoint tp = name_fun.substr(name_fun_tp_len);
             block_with_tp[tp] = curBlock;
-            cout << "Tracepoint found: \"" << tp << "\" in " << curBlock << endl;
         }
     }
 };
@@ -164,6 +187,10 @@ int main(int argc, char **argv) {
     // Visit all the branch instances and build an oriented graph
     BranchInstVisitor BIV;
     BIV.visit(*Mod);
+
+    //for (auto [tp, bb] : block_with_tp) {
+        //cout << "Tracepoint: \"" << tp << "\" in " << ind[bb] << endl;
+    //}
 
     // Run searching of loop in trace
     cout << findLoopInTrace() << endl;
