@@ -32,6 +32,7 @@ void dfs(BasicBlock *start) {
             dfs(to);
         }
     }
+    states[start] = VertexState::Visited;
 }
 
 struct BranchInstVisitor : public InstVisitor<BranchInstVisitor> {
