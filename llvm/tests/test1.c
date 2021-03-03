@@ -1,14 +1,12 @@
 int a;
 
 int fn() {
-    while (1);
+    return main();
 }
 
 int main() {
     if (a == 0) {
-        for (int i = 0; i < 5; ++i) {
-            f();
-        }
+        fn();
     } else {
         return 1;
     }

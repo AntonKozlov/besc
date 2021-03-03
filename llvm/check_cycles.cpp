@@ -35,17 +35,15 @@ void dfs(BasicBlock *start) {
     states[start] = VertexState::Visited;
 }
 
-struct BranchInstVisitor : public InstVisitor<BranchInstVisitor> {
-    unsigned count;
-
-    BranchInstVisitor() : count(0) {}
+struct BESCVisitor : public InstVisitor<BESCVisitor> {
+    BESCVisitor() {};
 
     void visitBranchInst(BranchInst &BI) {
-        count++;
-        cout << "BranchInst found: " << count << "\n";
         for (unsigned i = 0; i < BI.getNumSuccessors(); i++) {
             BasicBlock *from = BI.getParent(), *to = BI.getSuccessor(i);
-            cout << from << " -> " << to << endl;
+
+            errs() << from << " -branch-> " << to << "\n";
+
             if (graph.find(from) == graph.end()) {
                 vector < BasicBlock * > adj = {to};
                 graph.insert(make_pair(from, adj));
@@ -54,6 +52,21 @@ struct BranchInstVisitor : public InstVisitor<BranchInstVisitor> {
             }
         }
     }
+
+    void visitCallInst(CallInst &CI) {
+        BasicBlock *from = CI.getParent();
+        BasicBlock *to = &CI.getCalledFunction()->getEntryBlock();
+
+        errs() << from << " --call--> " << to << "\n";
+
+        if (graph.find(from) == graph.end()) {
+            vector < BasicBlock * > adj = {to};
+            graph.insert(make_pair(from, adj));
+        } else {
+            graph[from].push_back(to);
+        }
+    }
+
 };
 
 int main(int argc, char **argv) {
@@ -72,8 +85,8 @@ int main(int argc, char **argv) {
     }
 
     // Visit all the branch instances and build an oriented graph
-    BranchInstVisitor BIV;
-    BIV.visit(*Mod);
+    BESCVisitor visitor;
+    visitor.visit(*Mod);
 
     // Prepare states of vertices (colors)
     for (auto const&[vertex, _] : graph) {
