@@ -14,7 +14,7 @@ test: $(TESTS:%=do-%)
 tests/%.ll : tests/%.c
 	clang -Wno-implicit-function-declaration -emit-llvm -S $< -o $@
 
-test-rules = do-$1 : tests/$1.ll
+test-rules = do-$1 : tests/$1.ll check_cycles
 
 $(call test-rules,%)
 	./check_cycles $< main_entry main_exit
