@@ -1,16 +1,12 @@
-int a;
-
-int fn() {
-    while (1);
-}
-
 int main() {
-    if (a == 0) {
+    besc_tracepoint_main_entry();
+    if (rand()) {
         for (int i = 0; i < 5; ++i) {
-            f();
+            besc_tracepoint_3();
         }
     } else {
         return 1;
     }
+    besc_tracepoint_main_exit();
     return 0;
 }
