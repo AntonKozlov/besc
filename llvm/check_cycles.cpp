@@ -95,7 +95,7 @@ private:
 class LoopsFinder {
 
 private:
-    static enum class VertexStatus {
+    enum class VertexStatus {
         NotVisited,
         Visiting,
         Visited
@@ -263,18 +263,20 @@ private:
 
 // status of trace searching
 enum class SearchingState {
+    Success,
     StartTPNotFound, // can't find function "{name_fun_tp}{start_tp}"
     FinalTPNotFound, // can't find function "{name_fun_tp}{final_tp}"
     CantReach, // there isn't path from start_tp to final_tp
     LoopFound, // there is loop in path between start_tp and final_tp
     MaybeCantReach, // there is path from start_tp, but doesn't reach final_tp
-    Success // otherwise
 };
 
 // pretty print of SearchingState
 ostream& operator<<(ostream& out, const SearchingState state){
     string str;
     switch(state) {
+        case SearchingState::Success:
+            str = "OK"; break;
         case SearchingState::StartTPNotFound:
             str = "Tracepoint start tracepoint was not found"; break;
         case SearchingState::FinalTPNotFound:
@@ -285,8 +287,6 @@ ostream& operator<<(ostream& out, const SearchingState state){
             str = "There is loop in trace between start tracepoint and final tracepoint"; break;
         case SearchingState::MaybeCantReach:
             str = "There is path from start tracepoint, but doesn't reach final tracepoint"; break;
-        case SearchingState::Success:
-            str = "OK"; break;
     }
     return out << str;
 }
@@ -332,7 +332,8 @@ int main(int argc, char **argv) {
     }
 
     // Run searching of loop in trace
-    cout << main_(*Mod, start_tp, final_tp) << endl;
+    SearchingState ret = main_(*Mod, start_tp, final_tp);
 
-    return 0;
+    cout << ret << endl;;
+    return static_cast<int>(ret);
 }

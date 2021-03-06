@@ -18,7 +18,8 @@ do-% : tests/%.ll
 	true
 
 do-test3 : tests/test3.ll
-	./check_cycles $< 1 2
+	./check_cycles $< 1 22
+	./check_cycles $< 1 2 # ; [ $$? = 4 ]
 
 clean:
 	rm -f *.o check_cycles tests/*.ll
