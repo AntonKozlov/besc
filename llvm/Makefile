@@ -37,5 +37,12 @@ $(call test-rules,test5)
 	./check_cycles $< 2 main_exit ; [ $$? = 4 ]
 	./check_cycles $< main_entry main_exit ; [ $$? = 4 ]
 
+$(call test-rules,test6)
+	./check_cycles $< 1 2 ; [ $$? = 5 ]
+	./check_cycles $< 2 1 ; [ $$? = 4 ]
+	./check_cycles $< main_entry 1 ; [ $$? = 5 ]
+	./check_cycles $< 2 main_exit ; [ $$? = 4 ]
+	./check_cycles $< main_entry main_exit ; [ $$? = 4 ]
+
 clean:
 	rm -f *.o check_cycles tests/*.ll

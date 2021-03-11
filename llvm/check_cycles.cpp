@@ -195,10 +195,10 @@ public:
 private:
     bool dfs(Vertex v, Vertex final_v) {
         used[v] = true;
-        if (in_loop[v])
-            return true;
         if (v == final_v)
             return false;
+        if (in_loop[v])
+            return true;
         for (Vertex to : graph[v]) {
             if (used[to]) {}
             else {
