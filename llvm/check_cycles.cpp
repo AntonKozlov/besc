@@ -266,9 +266,9 @@ ostream& operator<<(ostream& out, const SearchingState state){
         case SearchingState::Success:
             str = "OK"; break;
         case SearchingState::StartTPNotFound:
-            str = "Tracepoint start tracepoint was not found"; break;
+            str = "Start tracepoint was not found"; break;
         case SearchingState::FinalTPNotFound:
-            str = "Tracepoint final tracepoint was not found"; break;
+            str = "Final tracepoint was not found"; break;
         case SearchingState::CantReach:
             str = "There isn't path between start tracepoint and final tracepoint"; break;
         case SearchingState::LoopFound:
