@@ -101,40 +101,30 @@ private:
     Graph graph;
     unsigned N;
     vector<VertexStatus> status;
-    unsigned time;
-    vector<unsigned> timein;
-    vector<Vertex> up;
+    vector<bool> in_loop;
 
 public:
     LoopsFinder(Graph& graph_) {
         graph = graph_;
         N = graph.size();
         status.assign(N, VertexStatus::NotVisited);
-        time = 0;
-        timein.resize(N);
-        up.resize(N);
+        in_loop.assign(N, false);
     }
 
     vector<bool> find() {
         dfs(0); // TODO, while I suggest that 0 is start block of main()
-        vector<bool> in_loop(N);
-        for (Vertex v = 0; v < N; v++)
-            in_loop[v] = (up[v] <= timein[v]);
         return in_loop;
     }
 
 private:
     void dfs(Vertex v) {
-        timein[v] = ++time;
-        up[v] = timein[v] + 1;
         status[v] = VertexStatus::Visiting;
         for (Vertex to : graph[v]) {
             if (status[to] == VertexStatus::Visiting) {
-                up[v] = min(up[v], timein[to]);
+                in_loop[v] = true;
             }
             else if (status[to] == VertexStatus::NotVisited) {
                 dfs(to);
-                up[v] = min(up[v], up[to]);
             }
         }
         status[v] = VertexStatus::Visited;
@@ -205,10 +195,10 @@ public:
 private:
     bool dfs(Vertex v, Vertex final_v) {
         used[v] = true;
-        if (in_loop[v])
-            return true;
         if (v == final_v)
             return false;
+        if (in_loop[v])
+            return true;
         for (Vertex to : graph[v]) {
             if (used[to]) {}
             else {
@@ -276,9 +266,9 @@ ostream& operator<<(ostream& out, const SearchingState state){
         case SearchingState::Success:
             str = "OK"; break;
         case SearchingState::StartTPNotFound:
-            str = "Tracepoint start tracepoint was not found"; break;
+            str = "Start tracepoint was not found"; break;
         case SearchingState::FinalTPNotFound:
-            str = "Tracepoint final tracepoint was not found"; break;
+            str = "Final tracepoint was not found"; break;
         case SearchingState::CantReach:
             str = "There isn't path between start tracepoint and final tracepoint"; break;
         case SearchingState::LoopFound:
