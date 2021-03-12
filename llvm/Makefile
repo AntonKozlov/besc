@@ -31,6 +31,7 @@ $(call test-rules,test2)
 
 $(call test-rules,test3)
 	./check_cycles $< main_entry 22
+	./check_cycles $< 22 main_entry ; [ $$? = 3 ]
 	./check_cycles $< main_entry main_exit ; [ $$? = 4 ]
 
 $(call test-rules,test5)

@@ -51,14 +51,56 @@ public:
     }
 };
 
+// InstVisitor for working with tracepoints
+template<class SubClass, class RetTy = void>
+class TPInstVisitor : public InstVisitor<SubClass, RetTy> {
+
+private:
+    inline static string name_fun_tp = "besc_tracepoint_";
+    inline static int name_fun_tp_len = name_fun_tp.length();
+
+public:
+    bool isTracePointCall(Instruction& I) {
+        return (getTracePoint(I) != nullptr);
+    }
+
+    TracePoint* getTracePoint(Instruction& I) {
+        if ( ! isa<CallInst>(I))
+            return nullptr;
+        string name_fun = cast<CallInst>(I).getCalledFunction()->getName().str();
+        if (name_fun.substr(0, name_fun_tp_len) != name_fun_tp)
+            return nullptr;
+        auto tp = new TracePoint(name_fun.substr(name_fun_tp_len));
+        return tp;
+    }
+};
+
+// split blocks by tracepoints
+class BlocksSplitter : public TPInstVisitor<BlocksSplitter> {
+
+public:
+    BlocksSplitter() {}
+
+    void split(Module& M) {
+        visit(M);
+    }
+
+    void visitBasicBlock(BasicBlock& BB) {
+        auto I = BB.begin(); ++I;
+        for (; I != BB.end(); I++) {
+            if (isTracePointCall(*I)) {
+                visitBasicBlock(*BB.splitBasicBlock(I));
+                return;
+            }
+        }
+    }
+};
 
 // find tracepoints in Module
-class TracePointFinder : public InstVisitor<TracePointFinder> {
+class TracePointFinder : public TPInstVisitor<TracePointFinder> {
 
 private:
     map<TracePoint, BasicBlock *> tracepoints;
-    inline static string name_fun_tp = "besc_tracepoint_";
-    inline static int name_fun_tp_len = name_fun_tp.length();
 
     template<class T1, class T2, class T3>
     map<T1, T3> mapUnion(map<T1, T2>& map_1, map<T2, T3>& map_2) {
@@ -81,11 +123,9 @@ public:
 
     void visitCallInst(CallInst& CI) {
         BasicBlock *curBlock = CI.getParent();
-        string name_fun = CI.getCalledFunction()->getName().str();
-        if (name_fun.substr(0, name_fun_tp_len) == name_fun_tp) {
-            TracePoint tp = name_fun.substr(name_fun_tp_len);
-            tracepoints[tp] = curBlock;
-        }
+        TracePoint *tp = getTracePoint(CI);
+        if (tp != nullptr)
+            tracepoints[*tp] = curBlock;
     }
 };
 
@@ -281,6 +321,8 @@ ostream& operator<<(ostream& out, const SearchingState state){
 
 // main function of searching loop in trace between start_tp and final_tp
 SearchingState main_(Module& M, TracePoint start_tp, TracePoint final_tp) {
+    auto BS = BlocksSplitter();
+    BS.split(M);
     auto GC = GraphCreator();
     auto graph = GC.create(M);
     auto blockIdx = GC.getBlockIdx();
