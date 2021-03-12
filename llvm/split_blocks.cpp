@@ -30,14 +30,21 @@ public:
 
 class SplittingVisitor : public InstVisitor<SplittingVisitor> {
 
+private:
+    inline static string name_fun_tp = "besc_tracepoint_";
+    inline static int name_fun_tp_len = name_fun_tp.length();
+
 public:
-    void visitBasicBlock(BasicBlock &bb) {
-        for (auto i = bb.begin(); i != bb.end();) {
-            Instruction *Inst = &*i++;
-            bb.splitBasicBlock(i);
-            break;
-            bb.printAsOperand(errs(), false); 
-            cout << " " << Inst->getOpcodeName() << endl;
+    void visitBasicBlock(BasicBlock& BB) {
+        auto I = BB.begin(); ++I;
+        for (; I != BB.end(); I++) {
+            if (isa<CallInst>(*I)) {
+                string name_fun = cast<CallInst>(*I).getCalledFunction()->getName().str();
+                if (name_fun.substr(0, name_fun_tp_len) == name_fun_tp) {
+                    visitBasicBlock(*BB.splitBasicBlock(I));
+                    return;
+                }
+            }
         }
     }
 };
