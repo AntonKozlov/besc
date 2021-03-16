@@ -95,7 +95,6 @@ public:
         string name_fun = CI.getCalledFunction()->getName().str();
         if (name_fun == name_fun_tp) {
             TracePoint tp = getTracepointName(CI);
-            cout << tp << endl;
             tracepoints[tp] = curBlock;
         }
     }
