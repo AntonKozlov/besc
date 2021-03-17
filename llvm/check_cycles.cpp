@@ -36,7 +36,28 @@ void dfs(BasicBlock *start) {
 }
 
 struct BESCVisitor : public InstVisitor<BESCVisitor> {
-    BESCVisitor() {};
+
+    Module *M;
+
+    BESCVisitor(Module &M) {
+        this->M = &M;
+    };
+
+    void visitFunction(Function &F) {
+        if (F.getName() == "main") {
+            Instruction &firstInst = F.getEntryBlock().front();
+            LLVMContext &context = F.getEntryBlock().getContext();
+            BasicBlock &lastBlock = F.getBasicBlockList().back();
+
+            Type *ret_type = Type::getVoidTy(context);
+            FunctionType *func_type = FunctionType::get(ret_type, false);
+            FunctionCallee main_entry_fun = this->M->getOrInsertFunction("besc_tracepoint_main_entry", func_type);
+            FunctionCallee exit_entry_fun = this->M->getOrInsertFunction("besc_tracepoint_main_exit", func_type);
+
+            CallInst *main_call = CallInst::Create(main_entry_fun, ArrayRef<Value *>(), Twine(""), &firstInst);
+            CallInst *exit_call = CallInst::Create(exit_entry_fun, ArrayRef<Value *>(), Twine(""), &lastBlock);
+        }
+    }
 
     void visitBranchInst(BranchInst &BI) {
         for (unsigned i = 0; i < BI.getNumSuccessors(); i++) {
@@ -75,17 +96,19 @@ int main(int argc, char **argv) {
         return 1;
     }
 
+    char *input_filename = argv[1];
+
     // Parse the input LLVM IR file into a module.
     SMDiagnostic Err;
     LLVMContext Context;
-    unique_ptr <Module> Mod(parseIRFile(argv[1], Err, Context));
+    unique_ptr <Module> Mod(parseIRFile(input_filename, Err, Context));
     if (!Mod) {
         Err.print(argv[0], errs());
         return 1;
     }
 
     // Visit all the branch instances and build an oriented graph
-    BESCVisitor visitor;
+    BESCVisitor visitor(*Mod);
     visitor.visit(*Mod);
 
     // Prepare states of vertices (colors)
@@ -101,6 +124,10 @@ int main(int argc, char **argv) {
                 break;
         }
     }
+
+    std::error_code EC;
+    raw_ostream *out = new raw_fd_ostream(strcat(input_filename, ".new.ll"), EC, sys::fs::OpenFlags());
+    Mod->print(*out, nullptr);
 
     if (cycle_found) {
         cout << "Found branch cycle.\n" << endl;
