@@ -1,13 +1,37 @@
-build:
-	clang++ -O3 -Wall -std=c++14 check_cycles.cpp -o check_cycles.o `llvm-config --cxxflags --ldflags --libs --system-libs`
+.PRECIOUS : tests/%.ll
 
-test:
-	clang -emit-llvm -S tests/test1.c -o tests/test1.ll
-	clang -emit-llvm -S tests/test2.c -o tests/test2.ll
-	clang -emit-llvm -S tests/test3.c -o tests/test3.ll
-	./check_cycles.o tests/test1.ll
-	./check_cycles.o tests/test2.ll
-	./check_cycles.o tests/test3.ll
+all : check_cycles test
+
+test : check_cycles
+
+check_cycles : check_cycles.cpp
+	$(CXX) -O3 -Wall -std=c++14 $< $(shell llvm-config --cxxflags --ldflags --libs --system-libs) -o $@
+
+check_calls : check_calls.cpp
+	$(CXX) -O3 -Wall -std=c++14 $< $(shell llvm-config --cxxflags --ldflags --libs --system-libs) -o $@
+
+TESTS=$(patsubst tests/%.c,%,$(wildcard tests/*.c))
+
+test: $(TESTS:%=do-%)
+
+tests/%.ll : tests/%.c
+	clang -Wno-implicit-function-declaration -emit-llvm -S $< -o $@
+
+test-rules = do-$1 : tests/$1.ll check_cycles
+
+$(call test-rules,%)
+	./check_cycles $< main_entry main_exit
+
+$(call test-rules,test1)
+	./check_cycles $< main_entry main_exit ; [ $$? = 4 ]
+
+$(call test-rules,test2)
+	./check_cycles $< main_entry 2
+	./check_cycles $< main_entry main_exit ; [ $$? = 4 ]
+
+$(call test-rules,test3)
+	./check_cycles $< main_entry 22
+	./check_cycles $< main_entry main_exit ; [ $$? = 4 ]
 
 clean:
-	rm -rf *.o tests/*.ll
+	rm -f *.o check_cycles tests/*.ll
