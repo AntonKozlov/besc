@@ -32,3 +32,8 @@ $(call test-rules,test3)
 
 clean:
 	rm -f *.o check_cycles tests/*.ll
+	rm -rf tmp
+
+include make/base.mk
+include make/bin.mk
+include make/ll.mk
