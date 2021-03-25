@@ -8,6 +8,22 @@
 
 #include "utils.hxx"
 
+namespace {
+    inline unsigned line2idx(unsigned line) {
+        return line - 1;
+    }
+
+    int str_repr_len(unsigned line) {
+        int len = 0;
+        int n = line;
+        while (n != 0) {
+            n /= 10;
+            len += 1;
+        }
+        return len == 0 ? 1 : len;
+    }
+}
+
 class source_printer::file {
 public:
     std::vector<std::string> lines;
@@ -56,11 +72,7 @@ void source_printer::print_code_point(const llvm::Instruction& inst) {
         file = it->second;
     }
 
-    std::stringstream line_stream;
-    line_stream << line;
-    auto line_str = line_stream.str();
-
     this->out << full_name << ':' << line << ':' << column << std::endl;
-    this->out << '\t' << line_str << " |\t" << file->lines[line - 1] << std::endl;
-    this->out << '\t' << std::string(line_str.size(), ' ') << " |\t" << std::string(column - 1, ' ') << '^' << std::endl;
+    this->out << '\t' << line << " |\t" << file->lines[line2idx(line)] << std::endl;
+    this->out << '\t' << std::string(str_repr_len(line), ' ') << " |\t" << std::string(column - 1, ' ') << '^' << std::endl;
 }
