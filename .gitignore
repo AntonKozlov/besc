@@ -1,3 +1,5 @@
 .idea/
 .o
 cmake-build-debug/
+/llvm/tests/*.ll
+/llvm/check_cycles

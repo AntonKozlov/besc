@@ -18,12 +18,12 @@ string name_fun_tp = "besc_tracepoint_";
 int name_fun_tp_len = name_fun_tp.length();
 
 enum class SearchingState {
+    Success,
     StartTPNotFound,
     FinalTPNotFound,
     CantReach,
     LoopFound,
     MaybeCantReach,
-    Success
 };
 
 struct DfsStatus {
@@ -193,7 +193,8 @@ int main(int argc, char **argv) {
     //}
 
     // Run searching of loop in trace
-    cout << findLoopInTrace() << endl;
+    SearchingState ret = findLoopInTrace();
 
-    return 0;
+    cout << ret << endl;;
+    return static_cast<int>(ret);
 }
