@@ -79,15 +79,13 @@ public:
     }
 
     string getTracepointName(CallInst& CI) {
-        string argument = cast<ConstantDataArray>(
-                cast<GlobalVariable>(
-                    cast<ConstantExpr>(
-                        CI.getArgOperand(0)
-                    )->getOperand(0)
-                )->getInitializer()
-            )->getAsString()
-            .str();
-        return argument.substr(0, argument.size() - 1); // remove trailing '\00'
+        auto llvm_operand = cast<ConstantExpr>(CI.getArgOperand(0));
+        auto func_operand = cast<GlobalVariable>(llvm_operand->getOperand(0));
+        auto llvm_array   = cast<ConstantDataArray>(func_operand->getInitializer());
+        auto llvm_string  = llvm_array->getAsString();
+        string argument   = llvm_string.str();
+
+        return argument.substr(0, argument.size() - 1); // remove trailing '\00'    
     }
 
     void visitCallInst(CallInst& CI) {
