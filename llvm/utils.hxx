@@ -14,12 +14,7 @@ public:
     void print_code_point(const llvm::Instruction& inst);
 
 private:
-    class file {
-    public:
-        std::vector<std::string> lines;
-
-        file(const std::string& filename);
-    };
+    class file;
 
     const std::string source_path;
     std::ostream& out;
