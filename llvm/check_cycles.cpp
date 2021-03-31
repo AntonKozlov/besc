@@ -20,11 +20,11 @@ typedef vector<vector<Vertex>> Graph;
 class SearchingState
 {
 public:
-    bool StartTPNotFound;       // can't find function "{name_fun_tp}{start_tp}"
-    bool FinalTPNotFound;       // can't find function "{name_fun_tp}{final_tp}"
-    bool FinalTPUnreachable;    // there isn't a path from start_tp to final_tp
-    bool LoopFound;             // there is loop in path between start_tp and final_tp
-    bool FinalTPAvoidable;      // there is path from start_tp, but doesn't reach final_tp
+    bool StartTPNotFound;    // can't find function "{name_fun_tp}{start_tp}"
+    bool FinalTPNotFound;    // can't find function "{name_fun_tp}{final_tp}"
+    bool FinalTPUnreachable; // there isn't a path from start_tp to final_tp
+    bool LoopFound;          // there is loop in path between start_tp and final_tp
+    bool FinalTPAvoidable;   // there is path from start_tp, but doesn't reach final_tp
 
     SearchingState() : StartTPNotFound(false),
                        FinalTPNotFound(false),
@@ -194,7 +194,7 @@ private:
             {
                 dfs(to, final_v);
             }
-            
+
             if (status[to].color == Grey)
             {
                 for (auto w = dfs_stack.rbegin(); *w != to; w++)
@@ -254,7 +254,7 @@ private:
         {
             if (!used[to] and dfs(to, final_v))
             {
-                    return true;
+                return true;
             }
         }
         return false;
