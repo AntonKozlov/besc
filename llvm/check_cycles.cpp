@@ -57,8 +57,7 @@ class TracePointFinder : public InstVisitor<TracePointFinder> {
 
 private:
     map<TracePoint, BasicBlock *> tracepoints;
-    inline static string name_fun_tp = "besc_tracepoint_";
-    inline static int name_fun_tp_len = name_fun_tp.length();
+    inline static string name_fun_tp = "besc_tracepoint";
 
     template<class T1, class T2, class T3>
     map<T1, T3> mapUnion(map<T1, T2>& map_1, map<T2, T3>& map_2) {
@@ -79,11 +78,21 @@ public:
         return mapUnion(tracepoints, blockIdx);
     }
 
+    string getTracepointName(CallInst& CI) {
+        auto llvm_operand = cast<ConstantExpr>(CI.getArgOperand(0));
+        auto func_operand = cast<GlobalVariable>(llvm_operand->getOperand(0));
+        auto llvm_array   = cast<ConstantDataArray>(func_operand->getInitializer());
+        auto llvm_string  = llvm_array->getAsString();
+        string argument   = llvm_string.str();
+
+        return argument.substr(0, argument.size() - 1); // remove trailing '\00'    
+    }
+
     void visitCallInst(CallInst& CI) {
         BasicBlock *curBlock = CI.getParent();
         string name_fun = CI.getCalledFunction()->getName().str();
-        if (name_fun.substr(0, name_fun_tp_len) == name_fun_tp) {
-            TracePoint tp = name_fun.substr(name_fun_tp_len);
+        if (name_fun == name_fun_tp) {
+            TracePoint tp = getTracepointName(CI);
             tracepoints[tp] = curBlock;
         }
     }
