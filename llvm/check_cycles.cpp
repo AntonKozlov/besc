@@ -102,7 +102,7 @@ class TracePointFinder : public InstVisitor<TracePointFinder>
 
 private:
     map<TracePoint, BasicBlock *> tracepoints;
-    inline static string tp_prefix = "besc_tracepoint_";
+    inline static string tp_name = "besc_tracepoint";
 
 public:
     TracePointFinder() {}
@@ -113,13 +113,21 @@ public:
         return mapUnion(tracepoints, blockIdx);
     }
 
-    void visitCallInst(CallInst &CI)
-    {
+    string getTracepointName(CallInst& CI) {
+        auto llvm_operand = cast<ConstantExpr>(CI.getArgOperand(0));
+        auto func_operand = cast<GlobalVariable>(llvm_operand->getOperand(0));
+        auto llvm_array   = cast<ConstantDataArray>(func_operand->getInitializer());
+        auto llvm_string  = llvm_array->getAsString();
+        string argument   = llvm_string.str();
+
+        return argument.substr(0, argument.size() - 1); // remove trailing '\00'    
+    }
+
+    void visitCallInst(CallInst& CI) { 
         BasicBlock *curBlock = CI.getParent();
         string name_fun = CI.getCalledFunction()->getName().str();
-        if (name_fun.substr(0, tp_prefix.length()) == tp_prefix)
-        {
-            TracePoint tp = name_fun.substr(tp_prefix.length());
+        if (name_fun == tp_name) {
+            TracePoint tp = getTracepointName(CI);
             tracepoints[tp] = curBlock;
         }
     }
@@ -162,7 +170,7 @@ private:
 
 public:
     vector<DfsStatus> status;
-    
+
     LoopsFinder(Graph &graph_, map<TracePoint, Vertex> &labels_)
     {
         graph = graph_;

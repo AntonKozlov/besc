@@ -4,6 +4,20 @@ all : check_cycles test
 
 test : check_cycles
 
+docker-image-name = besc
+docker-container-workdir = /besc/llvm
+
+.docker-image : Dockerfile
+	docker build -t $(docker-image-name) .
+	touch .docker-image
+
+in-docker : .docker-image
+	docker run \
+        --rm \
+        -v $(shell pwd):$(docker-container-workdir) \
+        -w $(docker-container-workdir) \
+        $(docker-image-name) make
+
 check_cycles : check_cycles.cpp
 	$(CXX) -O3 -Wall -std=c++14 $< $(shell llvm-config --cxxflags --ldflags --libs --system-libs) -o $@
 
@@ -32,3 +46,7 @@ $(call test-rules,test3)
 
 clean:
 	rm -f *.o check_cycles tests/*.ll
+
+clean-docker : clean
+	docker rmi $(docker-image-name)
+	rm -f .docker-image
