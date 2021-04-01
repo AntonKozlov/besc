@@ -44,6 +44,20 @@ $(call test-rules,test3)
 	./check_cycles $< main_entry 22
 	./check_cycles $< main_entry main_exit ; [ $$? = 2 ]
 
+$(call test-rules,test5)
+	./check_cycles $< 1 2
+	./check_cycles $< 2 1 ; [ $$? = 1 ]
+	./check_cycles $< main_entry 1 ; [ $$? = 1 ]
+	./check_cycles $< 2 main_exit ; [ $$? = 2 ]
+	./check_cycles $< main_entry main_exit ; [ $$? = 2 ]
+
+$(call test-rules,test6)
+	./check_cycles $< 1 2 ; [ $$? = 1 ]
+	./check_cycles $< 2 1 ; [ $$? = 1 ]
+	./check_cycles $< main_entry 1 ; [ $$? = 1 ]
+	./check_cycles $< 2 main_exit ; [ $$? = 2 ]
+	./check_cycles $< main_entry main_exit ; [ $$? = 2 ]
+
 clean:
 	rm -f *.o check_cycles tests/*.ll
 
