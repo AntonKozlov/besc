@@ -3,3 +3,4 @@
 cmake-build-debug/
 /llvm/tests/*.ll
 /llvm/check_cycles
+/llvm/.docker-image
