@@ -20,8 +20,8 @@ typedef vector<vector<Vertex>> Graph;
 class SearchingState
 {
 public:
-    bool StartTPNotFound;    // can't find function "{name_fun_tp}{start_tp}"
-    bool FinalTPNotFound;    // can't find function "{name_fun_tp}{final_tp}"
+    bool StartTPNotFound;    // can't find function "{tp_prefix}{start_tp}"
+    bool FinalTPNotFound;    // can't find function "{tp_prefix}{final_tp}"
     bool FinalTPUnreachable; // there isn't a path from start_tp to final_tp
     bool LoopFound;          // there is loop in path between start_tp and final_tp
     bool FinalTPAvoidable;   // there is path from start_tp, but doesn't reach final_tp
@@ -157,11 +157,12 @@ private:
         Color color = White;
     };
     Graph graph;
-    vector<DfsStatus> status;
     vector<Vertex> dfs_stack;
     map<TracePoint, Vertex> labels;
 
 public:
+    vector<DfsStatus> status;
+    
     LoopsFinder(Graph &graph_, map<TracePoint, Vertex> &labels_)
     {
         graph = graph_;
@@ -169,11 +170,10 @@ public:
         status.assign(graph.size(), DfsStatus());
     }
 
-    pair<bool, bool> find(TracePoint start_tp, TracePoint final_tp)
+    void find(TracePoint start_tp, TracePoint final_tp)
     {
         dfs(labels[start_tp], labels[final_tp]);
-        return {status[labels[start_tp]].loop_found,
-                status[labels[start_tp]].reached_final_tp};
+        return;
     }
 
 private:
@@ -197,6 +197,8 @@ private:
 
             if (status[to].color == Grey)
             {
+                // You can modify that part of dfs to mark cycles and retrieve
+                // info about them
                 for (auto w = dfs_stack.rbegin(); *w != to; w++)
                 {
                     status[*w].loop_found = true;
@@ -262,25 +264,34 @@ private:
 };
 
 // main function of searching loop in trace between start_tp and final_tp
-SearchingState *runSearch(Module &M, TracePoint start_tp, TracePoint final_tp)
+SearchingState runSearch(Module &M, TracePoint start_tp, TracePoint final_tp)
 {
-    SearchingState *state = new SearchingState();
+    SearchingState state = SearchingState();
     auto GC = GraphCreator();
     Graph graph = GC.create(M);
 
     auto blockIdx = GC.getBlockIdx();
     auto labels = TracePointFinder().find(M, blockIdx);
 
-    state->StartTPNotFound = labels.find(start_tp) == labels.end();
-    state->FinalTPNotFound = labels.find(final_tp) == labels.end();
+    state.StartTPNotFound = labels.find(start_tp) == labels.end();
+    state.FinalTPNotFound = labels.find(final_tp) == labels.end();
+
+    // Early return to avoid pointless loops finding, etc.
+    if (state.StartTPNotFound || state.FinalTPNotFound)
+    {
+        return state;
+    }
 
     // LoopsFinder still has to collect info about final tp reachability,
     // so we reuse it as a side effect.
-    auto result = LoopsFinder(graph, labels).find(start_tp, final_tp);
-    state->LoopFound = result.first;
-    state->FinalTPUnreachable = !result.second;
+    // TODO: save results in LoopsFinder and use them here
+    auto loopsFinder = LoopsFinder(graph, labels);
+    loopsFinder.find(start_tp, final_tp);
 
-    state->FinalTPAvoidable = FinalTPAvoidableChecker(graph, labels).check(start_tp, final_tp);
+    state.LoopFound = loopsFinder.status[labels[start_tp]].loop_found;
+    state.FinalTPUnreachable = !loopsFinder.status[labels[start_tp]].reached_final_tp;
+
+    state.FinalTPAvoidable = FinalTPAvoidableChecker(graph, labels).check(start_tp, final_tp);
     return state;
 }
 
@@ -307,7 +318,7 @@ int main(int argc, char **argv)
     }
 
     // Run searching of loop in trace
-    SearchingState *ret = runSearch(*Mod, start_tp, final_tp);
-    cout << (*ret) << endl;
-    return ret->to_int();
+    SearchingState ret = runSearch(*Mod, start_tp, final_tp);
+    cout << ret << endl;
+    return ret.to_int();
 }

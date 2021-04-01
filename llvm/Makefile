@@ -20,15 +20,15 @@ $(call test-rules,%)
 	./check_cycles $< main_entry main_exit
 
 $(call test-rules,test1)
-	./check_cycles $< main_entry main_exit ; [ $$? = 4 ]
+	./check_cycles $< main_entry main_exit ; [ $$? = 3 ]
 
 $(call test-rules,test2)
 	./check_cycles $< main_entry 2
-	./check_cycles $< main_entry main_exit ; [ $$? = 4 ]
+	./check_cycles $< main_entry main_exit ; [ $$? = 3 ]
 
 $(call test-rules,test3)
 	./check_cycles $< main_entry 22
-	./check_cycles $< main_entry main_exit ; [ $$? = 4 ]
+	./check_cycles $< main_entry main_exit ; [ $$? = 2 ]
 
 clean:
 	rm -f *.o check_cycles tests/*.ll
