@@ -5,7 +5,7 @@ int a = 5;
 
 int main() {
     besc_tracepoint("main_entry");
-    besc_tracepoint("22");
+    besc_tracepoint("1");
     if (a == 3) {
         if (a == 4) {
             for (int i = 0; i < 5; ++i) {
