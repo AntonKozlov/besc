@@ -15,6 +15,7 @@ using namespace std;
 typedef string TracePoint;
 typedef unsigned Vertex;
 typedef vector<vector<Vertex>> Graph;
+typedef unsigned int Time;
 
 // status of trace searching
 class SearchingState
@@ -165,8 +166,12 @@ private:
         Color color = White;
     };
     Graph graph;
-    vector<Vertex> dfs_stack;
     map<TracePoint, Vertex> labels;
+
+    Time time;
+    inline static Time maxTime = -1;
+    // more general version - `map<Vertex, Time> tin;`
+    vector<Time> tin;
 
 public:
     vector<DfsStatus> status;
@@ -176,42 +181,39 @@ public:
         graph = graph_;
         labels = labels_;
         status.assign(graph.size(), DfsStatus());
+        time = 0;
+        tin.assign(graph.size(), maxTime);
     }
 
     void find(TracePoint start_tp, TracePoint final_tp)
     {
         dfs(labels[start_tp], labels[final_tp]);
-        return;
     }
 
 private:
-    void dfs(Vertex v, Vertex final_v)
+    Time dfs(Vertex v, Vertex final_v)
     {
         if (v == final_v)
         {
             status[v].reached_final_tp = true;
             status[v].color = Black;
-            return;
+            return maxTime;
         }
 
+        tin[v] = ++time;
         status[v].color = Grey;
-        dfs_stack.push_back(v);
+        Time fup = maxTime;
         for (auto to : graph[v])
         {
             if (status[to].color == White)
             {
-                dfs(to, final_v);
+                Time fup_child = dfs(to, final_v);
+                fup = min(fup, fup_child);
             }
 
             if (status[to].color == Grey)
             {
-                // You can modify that part of dfs to mark cycles and retrieve
-                // info about them
-                for (auto w = dfs_stack.rbegin(); *w != to; w++)
-                {
-                    status[*w].loop_found = true;
-                }
-                status[to].loop_found = true;
+                fup = min(fup, tin[to]);
             }
 
             if (status[to].color == Black)
@@ -223,8 +225,10 @@ private:
                 }
             }
         }
-        dfs_stack.pop_back();
         status[v].color = Black;
+        if (fup <= tin[v])
+            status[v].loop_found = true;
+        return fup;
     }
 };
 
