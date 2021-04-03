@@ -16,28 +16,6 @@ using namespace llvm;
 using namespace std;
 
 
-enum class VertexState {
-    Visited, Visiting, NotVisited
-};
-
-map<BasicBlock *, VertexState> states;
-map<BasicBlock *, vector < BasicBlock * >>
-graph;
-
-bool cycle_found = false;
-
-void dfs(BasicBlock *start) {
-    states[start] = VertexState::Visiting;
-    for (auto to : graph[start]) {
-        if (states[to] == VertexState::Visiting) {
-            cycle_found = true;
-        } else if (states[to] == VertexState::NotVisited) {
-            dfs(to);
-        }
-    }
-    states[start] = VertexState::Visited;
-}
-
 struct BESCVisitor : public InstVisitor<BESCVisitor> {
 
     Module *M;
