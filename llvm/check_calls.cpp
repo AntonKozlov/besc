@@ -8,6 +8,7 @@
 #include <map>
 #include <iostream>
 #include <vector>
+#include <string>
 
 using namespace llvm;
 using namespace std;
@@ -44,18 +45,19 @@ struct BESCVisitor : public InstVisitor<BESCVisitor> {
     };
 
     void visitFunction(Function &F) {
-        if (F.getName() == "main") {
+        if (F.getName().str().substr(0, 15) != "besc_tracepoint") {
             Instruction &firstInst = F.getEntryBlock().front();
             LLVMContext &context = F.getEntryBlock().getContext();
             BasicBlock &lastBlock = F.getBasicBlockList().back();
 
             Type *ret_type = Type::getVoidTy(context);
             FunctionType *func_type = FunctionType::get(ret_type, false);
-            FunctionCallee main_entry_fun = this->M->getOrInsertFunction("besc_tracepoint_main_entry", func_type);
-            FunctionCallee exit_entry_fun = this->M->getOrInsertFunction("besc_tracepoint_main_exit", func_type);
+            string func_name = F.getName().str();
+            FunctionCallee main_entry_fun = this->M->getOrInsertFunction("besc_tracepoint_" + func_name + "_entry", func_type);
+            FunctionCallee exit_entry_fun = this->M->getOrInsertFunction("besc_tracepoint_" + func_name + "_exit", func_type);
 
             CallInst *main_call = CallInst::Create(main_entry_fun, ArrayRef<Value *>(), Twine(""), &firstInst);
-            CallInst *exit_call = CallInst::Create(exit_entry_fun, ArrayRef<Value *>(), Twine(""), &lastBlock);
+            CallInst *exit_call = CallInst::Create(exit_entry_fun, ArrayRef<Value *>(), Twine(""), &(lastBlock.back()));
         }
     }
 
