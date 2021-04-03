@@ -42,7 +42,7 @@ struct BESCVisitor : public InstVisitor<BESCVisitor> {
     }
 
     void visitFunction(Function &F) {
-        if (F.getName().str().substr(0, 15) != "besc_tracepoint") {
+        if (F.getName().str() != "besc_tracepoint") {
             Instruction &firstInst = F.getEntryBlock().front();
             LLVMContext &context = F.getEntryBlock().getContext();
             Instruction &lastBlockInst = F.getBasicBlockList().back().back();
