@@ -96,33 +96,8 @@ public:
     }
 };
 
-// InstVisitor for working with tracepoints
-template<class SubClass, class RetTy = void>
-class TPInstVisitor : public InstVisitor<SubClass, RetTy>
-{
-
-private:
-    inline static string tracePointFunName = "besc_tracepoint";
-
-public:
-    TracePoint* getTracePoint(Instruction& I) {
-        auto *CI          = dyn_cast<CallInst>(&I);
-        if (CI == nullptr) return nullptr;
-        auto calledFunPtr = CI->getCalledFunction();
-        string funName    = calledFunPtr->getName().str();
-        if (funName != tracePointFunName) return nullptr;
-        auto llvm_operand = cast<ConstantExpr>(CI->getArgOperand(0));
-        auto func_operand = cast<GlobalVariable>(llvm_operand->getOperand(0));
-        auto llvm_array   = cast<ConstantDataArray>(func_operand->getInitializer());
-        auto llvm_string  = llvm_array->getAsString();
-        string argument   = llvm_string.str();
-        argument.resize(argument.size() - 1); // remove trailing '\00'
-        return new TracePoint(argument);
-    }
-};
-
 // split blocks by calling functions
-class BlocksSplitter : public TPInstVisitor<BlocksSplitter>
+class BlocksSplitter : public InstVisitor<BlocksSplitter>
 {
 
 public:
@@ -145,13 +120,29 @@ public:
 };
 
 // find tracepoints in Module
-class TracePointFinder : public TPInstVisitor<TracePointFinder> {
+class TracePointFinder : public InstVisitor<TracePointFinder> {
 
 private:
     map<TracePoint, BasicBlock *> tracepoints;
+    inline static string tracePointFunName = "besc_tracepoint";
 
 public:
     TracePointFinder() {}
+
+    TracePoint* getTracePoint(Instruction& I) {
+        auto *CI          = dyn_cast<CallInst>(&I);
+        if (CI == nullptr) return nullptr;
+        auto calledFunPtr = CI->getCalledFunction();
+        string funName    = calledFunPtr->getName().str();
+        if (funName != tracePointFunName) return nullptr;
+        auto llvm_operand = cast<ConstantExpr>(CI->getArgOperand(0));
+        auto func_operand = cast<GlobalVariable>(llvm_operand->getOperand(0));
+        auto llvm_array   = cast<ConstantDataArray>(func_operand->getInitializer());
+        auto llvm_string  = llvm_array->getAsString();
+        string argument   = llvm_string.str();
+        argument.resize(argument.size() - 1); // remove trailing '\00'
+        return new TracePoint(argument);
+    }
 
     map<TracePoint, Vertex> find(Module &M, map<BasicBlock *, Vertex> &blockIdx)
     {
