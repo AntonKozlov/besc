@@ -21,6 +21,9 @@ in-docker : .docker-image
 check_cycles : check_cycles.cpp
 	$(CXX) -O3 -Wall -std=c++14 $< $(shell llvm-config --cxxflags --ldflags --libs --system-libs) -o $@
 
+insert_tracepoints : insert_tracepoints.cpp
+	$(CXX) -O3 -Wall -std=c++14 $< $(shell llvm-config --cxxflags --ldflags --libs --system-libs) -o $@
+
 TESTS=$(patsubst tests/%.c,%,$(wildcard tests/*.c))
 
 test: $(TESTS:%=do-%)
