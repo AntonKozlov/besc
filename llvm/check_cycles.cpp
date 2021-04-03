@@ -147,7 +147,7 @@ ostream &operator<<(ostream &out, const SearchingState state)
 }
 
 // find loops in graph
-class LoopsFinder
+class CyclesChecker
 {
 
 private:
@@ -160,8 +160,9 @@ private:
 
     struct DfsStatus
     {
-        bool reached_final_tp = false;
-        bool loop_found = false;
+        bool reached_final_tp;
+        bool avoided_final_tp;
+        bool loop_found;
         Color color = White;
     };
     Graph graph;
@@ -171,32 +172,39 @@ private:
 public:
     vector<DfsStatus> status;
 
-    LoopsFinder(Graph &graph_, map<TracePoint, Vertex> &labels_)
+    CyclesChecker(Graph &graph_, map<TracePoint, Vertex> &labels_)
     {
         graph = graph_;
         labels = labels_;
-        status.assign(graph.size(), DfsStatus());
     }
 
-    void find(TracePoint start_tp, TracePoint final_tp)
+    void check(TracePoint start_tp, TracePoint final_tp)
     {
+        clear();
         dfs(labels[start_tp], labels[final_tp]);
-        return;
     }
 
 private:
+    void clear() {
+        status.assign(graph.size(), DfsStatus());
+    }
+
     void dfs(Vertex v, Vertex final_v)
     {
         if (v == final_v)
         {
             status[v].reached_final_tp = true;
+            status[v].avoided_final_tp = false;
             status[v].color = Black;
             return;
         }
 
+        status[v].reached_final_tp = false;
+        status[v].avoided_final_tp = graph[v].empty();
+        status[v].loop_found = false;
         status[v].color = Grey;
         dfs_stack.push_back(v);
-        for (auto to : graph[v])
+        for (Vertex to : graph[v])
         {
             if (status[to].color == White)
             {
@@ -218,56 +226,18 @@ private:
             {
                 if (status[to].reached_final_tp)
                 {
-                    status[v].loop_found |= status[to].loop_found;
                     status[v].reached_final_tp = true;
+                    status[v].avoided_final_tp |= status[to].avoided_final_tp;
+                    status[v].loop_found |= status[to].loop_found;
+                }
+                else
+                {
+                    status[v].avoided_final_tp = true;
                 }
             }
         }
         dfs_stack.pop_back();
         status[v].color = Black;
-    }
-};
-
-// find path from start_tp which doesn't reach final_tp
-class FinalTPAvoidableChecker
-{
-
-private:
-    Graph graph;
-    unsigned N;
-    map<TracePoint, Vertex> labels;
-    vector<bool> used;
-
-public:
-    FinalTPAvoidableChecker(Graph &graph_, map<TracePoint, Vertex> &labels_)
-    {
-        graph = graph_;
-        N = graph.size();
-        labels = labels_;
-    }
-
-    bool check(TracePoint start_tp, TracePoint final_tp)
-    {
-        used.assign(N, false);
-        return dfs(labels[start_tp], labels[final_tp]);
-    }
-
-private:
-    bool dfs(Vertex v, Vertex final_v)
-    {
-        used[v] = true;
-        if (v == final_v)
-            return false;
-        if (graph[v].empty())
-            return true;
-        for (Vertex to : graph[v])
-        {
-            if (!used[to] and dfs(to, final_v))
-            {
-                return true;
-            }
-        }
-        return false;
     }
 };
 
@@ -293,13 +263,12 @@ SearchingState runSearch(Module &M, TracePoint start_tp, TracePoint final_tp)
     // LoopsFinder still has to collect info about final tp reachability,
     // so we reuse it as a side effect.
     // TODO: save results in LoopsFinder and use them here
-    auto loopsFinder = LoopsFinder(graph, labels);
-    loopsFinder.find(start_tp, final_tp);
+    auto cyclesChecker = CyclesChecker(graph, labels);
+    cyclesChecker.check(start_tp, final_tp);
 
-    state.LoopFound = loopsFinder.status[labels[start_tp]].loop_found;
-    state.FinalTPUnreachable = !loopsFinder.status[labels[start_tp]].reached_final_tp;
-
-    state.FinalTPAvoidable = FinalTPAvoidableChecker(graph, labels).check(start_tp, final_tp);
+    state.LoopFound = cyclesChecker.status[labels[start_tp]].loop_found;
+    state.FinalTPUnreachable = ! cyclesChecker.status[labels[start_tp]].reached_final_tp;
+    state.FinalTPAvoidable = cyclesChecker.status[labels[start_tp]].avoided_final_tp;
     return state;
 }
 
