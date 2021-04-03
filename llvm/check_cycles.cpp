@@ -73,15 +73,6 @@ map<T2, T3> mapApply(map<T1, T2>& map_1, map<T1, T3>& map_2)
     return res_map;
 }
 
-template <class T1>
-vector<T1 *> mapToVector(map<Index, T1>& map_, Size size)
-{
-    auto res_vec = vector<T1 *>(size, nullptr);
-    for (auto [key, value] : map_)
-        res_vec[key] = &value;
-    return res_vec;
-}
-
 // create graph of Module
 class GraphCreator : public InstVisitor<GraphCreator>
 {
@@ -99,11 +90,7 @@ public:
 
     map<BasicBlock *, Vertex> getBlockIdx() { return blockIdx; }
 
-    vector<FunName *> getCalledFun()
-    {
-        auto calledFun_ = mapApply(blockIdx, calledFun);
-        return mapToVector(calledFun_, amtBlocks);
-    }
+    map<Vertex, FunName> getCalledFun() { return mapApply(blockIdx, calledFun); }
 
     void visitBasicBlock(BasicBlock& BB_)
     {
