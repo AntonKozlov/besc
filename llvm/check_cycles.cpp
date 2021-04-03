@@ -252,13 +252,9 @@ private:
                 if (status[to].reached_final_tp)
                 {
                     status[v].reached_final_tp = true;
-                    status[v].avoided_final_tp |= status[to].avoided_final_tp;
                     status[v].loop_found |= status[to].loop_found;
                 }
-                else
-                {
-                    status[v].avoided_final_tp = true;
-                }
+                status[v].avoided_final_tp |= status[to].avoided_final_tp;
             }
         }
         dfs_stack.pop_back();
