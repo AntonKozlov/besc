@@ -42,7 +42,7 @@ struct BESCVisitor : public InstVisitor<BESCVisitor> {
     }
 
     void visitFunction(Function &F) {
-        if (F.getName().str() != "besc_tracepoint") {
+        if (F.getName().str() != "besc_tracepoint" && !F.empty() && this->M->getGlobalVariable(this->prefix + to_string(this->index), true) == NULL) {
             Instruction &firstInst = F.getEntryBlock().front();
             LLVMContext &context = F.getEntryBlock().getContext();
             Instruction &lastBlockInst = F.getBasicBlockList().back().back();
@@ -50,25 +50,24 @@ struct BESCVisitor : public InstVisitor<BESCVisitor> {
             string func_name = F.getName().str();
             string func_entry = func_name + "_entry";
             string func_exit = func_name + "_exit";
-            
+
             Value* offset = ConstantInt::get(Type::getInt64Ty(context), 0);
 
             Type *ret_type = Type::getVoidTy(context);
             Type *arg_type = Type::getInt8PtrTy(context);
             FunctionType *func_type = FunctionType::get(ret_type, {arg_type}, false);
-            
+
             Type* arg_entry_type = ArrayType::get(Type::getInt8Ty(context), func_entry.size() + 1);
             Type* arg_exit_type = ArrayType::get(Type::getInt8Ty(context), func_exit.size() + 1);
 
+            FunctionCallee besc_tp = this->M->getOrInsertFunction("besc_tracepoint", func_type);
+
             Value* arg_ptr_entry = ConstantExpr::getInBoundsGetElementPtr(arg_entry_type, this->initGlobalVariable(context, func_entry), {offset, offset});
             this->M->getOrInsertGlobal(this->prefix + to_string(this->index - 1), arg_entry_type);
+            CallInst::Create(besc_tp, ArrayRef<Value *>({arg_ptr_entry}), Twine(""), &firstInst);
 
             Value* arg_ptr_exit = ConstantExpr::getInBoundsGetElementPtr(arg_exit_type, this->initGlobalVariable(context, func_exit), {offset, offset});
             this->M->getOrInsertGlobal(this->prefix + to_string(this->index - 1), arg_exit_type);
-
-            FunctionCallee besc_tp = this->M->getOrInsertFunction("besc_tracepoint", func_type);
-
-            CallInst::Create(besc_tp, ArrayRef<Value *>({arg_ptr_entry}), Twine(""), &firstInst);
             CallInst::Create(besc_tp, ArrayRef<Value *>({arg_ptr_exit}), Twine(""), &lastBlockInst);
         }
     }
