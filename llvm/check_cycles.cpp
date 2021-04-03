@@ -13,8 +13,11 @@ using namespace llvm;
 using namespace std;
 
 typedef string TracePoint;
-typedef unsigned Vertex;
+typedef unsigned int Vertex;
 typedef vector<vector<Vertex>> Graph;
+typedef unsigned int Index;
+typedef Index Size;
+typedef string FunName;
 
 // status of trace searching
 class SearchingState
@@ -43,7 +46,7 @@ public:
 };
 
 template <class T1, class T2, class T3>
-map<T1, T3> mapUnion(map<T1, T2> &map_1, map<T2, T3> &map_2)
+map<T1, T3> mapUnion(map<T1, T2>& map_1, map<T2, T3>& map_2)
 {
     map<T1, T3> res_map;
     for (auto [key_1, key_2] : map_1)
@@ -56,6 +59,29 @@ map<T1, T3> mapUnion(map<T1, T2> &map_1, map<T2, T3> &map_2)
     return res_map;
 }
 
+template <class T1, class T2, class T3>
+map<T2, T3> mapApply(map<T1, T2>& map_1, map<T1, T3>& map_2)
+{
+    map<T2, T3> res_map;
+    for (auto [key, value] : map_2)
+    {
+        if (map_1.find(key) != map_1.end())
+        {
+            res_map[map_1[key]] = value;
+        }
+    }
+    return res_map;
+}
+
+template <class T1>
+vector<T1 *> mapToVector(map<Index, T1>& map_, Size size)
+{
+    auto res_vec = vector<T1 *>(size, nullptr);
+    for (auto [key, value] : map_)
+        res_vec[key] = &value;
+    return res_vec;
+}
+
 // create graph of Module
 class GraphCreator : public InstVisitor<GraphCreator>
 {
@@ -63,36 +89,56 @@ class GraphCreator : public InstVisitor<GraphCreator>
 private:
     Graph graph;
     map<BasicBlock *, Vertex> blockIdx;
-    unsigned amtBlocks;
+    map<BasicBlock *, FunName> calledFun;
+    unsigned int amtBlocks = 0;
 
 public:
-    GraphCreator() : amtBlocks(0) {}
+    GraphCreator(Module &M) { visit(M); }
 
-    Graph create(Module &M)
-    {
-        visit(M);
-        return graph;
-    }
+    Graph getGraph() { return graph; }
 
     map<BasicBlock *, Vertex> getBlockIdx() { return blockIdx; }
 
-    void visitBranchInst(BranchInst &BI)
+    vector<FunName *> getCalledFun()
     {
-        BasicBlock *from = BI.getParent();
-        for (BasicBlock *to : BI.successors())
+        auto calledFun_ = mapApply(blockIdx, calledFun);
+        return mapToVector(calledFun_, amtBlocks);
+    }
+
+    void visitBasicBlock(BasicBlock& BB_)
+    {
+        auto *BB = &BB_;
+        addVertex(BB);
+        for (auto I = BB->begin(); I != BB->end(); I++)
         {
-            for (BasicBlock *bb : {from, to})
+            if (auto *BI = dyn_cast<BranchInst>(I))
             {
-                // if bb is not found in blockIdx
-                if (blockIdx.find(bb) == blockIdx.end())
+                for (BasicBlock *nextBB : BI->successors())
                 {
-                    blockIdx[bb] = amtBlocks;
-                    amtBlocks++;
-                    graph.push_back({});
+                    addVertex(nextBB);
+                    addEdge(BB, nextBB);
                 }
             }
-            graph[blockIdx[from]].push_back(blockIdx[to]);
+            else if (auto *CI = dyn_cast<CallInst>(I))
+            {
+                calledFun[BB] = FunName(CI->getCalledFunction()->getName().str());
+            }
         }
+    }
+
+private:
+    void addVertex(BasicBlock *BB)
+    {
+        if (blockIdx.find(BB) == blockIdx.end())
+        {
+            blockIdx[BB] = amtBlocks++;
+            graph.push_back({});
+        }
+    }
+
+    void addEdge(BasicBlock *fromBB, BasicBlock *toBB)
+    {
+        graph[blockIdx[fromBB]].push_back(blockIdx[toBB]);
     }
 };
 
@@ -268,9 +314,9 @@ SearchingState runSearch(Module &M, TracePoint start_tp, TracePoint final_tp)
     SearchingState state = SearchingState();
     auto BS = BlocksSplitter();
     BS.split(M);
-    auto GC = GraphCreator();
-    Graph graph = GC.create(M);
 
+    auto GC = GraphCreator(M);
+    auto graph = GC.getGraph();
     auto blockIdx = GC.getBlockIdx();
     auto labels = TracePointFinder().find(M, blockIdx);
 
