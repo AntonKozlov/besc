@@ -215,6 +215,8 @@ private:
     set<FunName> dfsFunStack;
     vector<DfsStatus> status;
 
+    Vertex final_v;
+
 public:
     CyclesChecker(Graph& graph_, map<TracePoint, Vertex>& label_, map<Vertex, FunName>& calledFun_)
     {
@@ -226,8 +228,11 @@ public:
     DfsStatus check(TracePoint start_tp, TracePoint final_tp)
     {
         clear();
+        auto start_v = label[start_tp];
+        final_v = label[final_tp];
         // TODO here must be something like `dfsCalledFuns.insert(function[start_tp])`
-        return dfs(label[start_tp], label[final_tp]);
+        dfs(start_v);
+        return status[start_v];
     }
 
 private:
@@ -238,7 +243,7 @@ private:
         status.assign(graph.size(), DfsStatus());
     }
 
-    DfsStatus dfs(Vertex v, Vertex final_v)
+    void dfs(Vertex v)
     {
         if (v == final_v)
         {
@@ -246,7 +251,7 @@ private:
             status[v].avoided_final_tp = false;
             status[v].loop_found = false;
             color[v] = Black;
-            return status[v];
+            return;
         }
 
         if (calledFun.find(v) != calledFun.end() && dfsFunStack.find(calledFun[v]) != dfsFunStack.end())
@@ -259,14 +264,27 @@ private:
         {
             auto funName    = calledFun[v];
             auto funEntryTP = TracePoint(funName + "_entry");
-            auto funExitTP  = TracePoint(funName + "_exit");
             auto funEntryV  = label[funEntryTP];
-            auto funExitV   = label[funExitTP];
             dfsFunStack.insert(funName);
 
-            status[v] = dfs(funEntryV, funExitV);
+            dfs(funEntryV);
 
             dfsFunStack.erase(funName);
+
+            if (status[funEntryV].reached_final_tp)
+            {
+                status[v].reached_final_tp = true;
+                status[v].avoided_final_tp = status[funEntryV].avoided_final_tp;
+                status[v].loop_found = status[funEntryV].loop_found;
+                color[v] = Black;
+                return;
+            }
+            else
+            {
+                status[v].reached_final_tp = false;
+                status[v].avoided_final_tp = graph[v].empty();
+                status[v].loop_found = status[funEntryV].loop_found;
+            }
         }
         else
         {
@@ -281,7 +299,7 @@ private:
         {
             if (color[to] == White)
             {
-                dfs(to, final_v);
+                dfs(to);
             }
 
             if (color[to] == Grey)
@@ -307,7 +325,6 @@ private:
         }
         dfs_stack.pop_back();
         color[v] = Black;
-        return status[v];
     }
 };
 
