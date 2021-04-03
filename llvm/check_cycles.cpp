@@ -226,15 +226,6 @@ public:
     DfsStatus check(TracePoint start_tp, TracePoint final_tp)
     {
         clear();
-        for (auto v = 0; v < graph.size(); v++) {
-            cout << v << ":";
-            for (auto to : graph[v]) cout << " " << to;
-            if (calledFun.find(v) != calledFun.end()) cout << "   (call " << calledFun[v] << ")";
-            cout << endl;
-        }
-        cout << endl;
-        for (auto [tp, v] : label) cout << tp << " -> " << v << endl;
-        cout << endl;
         // TODO here must be something like `dfsCalledFuns.insert(function[start_tp])`
         return dfs(label[start_tp], label[final_tp]);
     }
@@ -249,7 +240,6 @@ private:
 
     DfsStatus dfs(Vertex v, Vertex final_v)
     {
-        cout << "> " << v << endl;
         if (v == final_v)
         {
             status[v].reached_final_tp = true;
@@ -261,14 +251,12 @@ private:
 
         if (calledFun.find(v) != calledFun.end() && dfsFunStack.find(calledFun[v]) != dfsFunStack.end())
         {
-            cout << "c" << endl;
             status[v].reached_final_tp = false;
             status[v].avoided_final_tp = false;
             status[v].loop_found = true;
         }
         else if (calledFun.find(v) != calledFun.end() && dfsFunStack.find(calledFun[v]) == dfsFunStack.end())
         {
-            cout << "v" << endl;
             auto funName    = calledFun[v];
             auto funEntryTP = TracePoint(funName + "_entry");
             auto funExitTP  = TracePoint(funName + "_exit");
@@ -282,7 +270,6 @@ private:
         }
         else
         {
-            cout << "n" << endl;
             status[v].reached_final_tp = false;
             status[v].avoided_final_tp = graph[v].empty();
             status[v].loop_found = false;
@@ -292,7 +279,6 @@ private:
         dfs_stack.push_back(v);
         for (Vertex to : graph[v])
         {
-            cout << "? " << to << endl;
             if (color[to] == White)
             {
                 dfs(to, final_v);
@@ -321,7 +307,6 @@ private:
         }
         dfs_stack.pop_back();
         color[v] = Black;
-        cout << "< " << v << endl;
         return status[v];
     }
 };
