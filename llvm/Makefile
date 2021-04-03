@@ -41,7 +41,10 @@ $(call test-rules,test2)
 	./check_cycles $< main_entry main_exit ; [ $$? = 3 ]
 
 $(call test-rules,test3)
-	./check_cycles $< main_entry 22
+	./check_cycles $< main_entry 1
+	./check_cycles $< 1 main_entry ; [ $$? = 5 ]
+	./check_cycles $< 4 main_exit
+	./check_cycles $< main_exit 4 ; [ $$? = 5 ]
 	./check_cycles $< main_entry main_exit ; [ $$? = 3 ]
 
 $(call test-rules,test5)

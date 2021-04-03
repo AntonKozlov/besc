@@ -96,16 +96,53 @@ public:
     }
 };
 
-// find tracepoints in Module
-class TracePointFinder : public InstVisitor<TracePointFinder>
+// split blocks by calling functions
+class BlocksSplitter : public InstVisitor<BlocksSplitter>
 {
+
+public:
+    BlocksSplitter() {}
+
+    void split(Module& M) {
+        visit(M);
+    }
+
+    void visitBasicBlock(BasicBlock& BB) {
+        auto I = BB.begin();
+        ++I; // we mustn't do anything with the first instruction
+        for (; I != BB.end(); I++) {
+            if (isa<CallInst>(*I)) {
+                visitBasicBlock(*BB.splitBasicBlock(I));
+                return;
+            }
+        }
+    }
+};
+
+// find tracepoints in Module
+class TracePointFinder : public InstVisitor<TracePointFinder> {
 
 private:
     map<TracePoint, BasicBlock *> tracepoints;
-    inline static string tp_name = "besc_tracepoint";
+    inline static string tracePointFunName = "besc_tracepoint";
 
 public:
     TracePointFinder() {}
+
+    TracePoint* getTracePoint(Instruction& I) {
+        auto *CI          = dyn_cast<CallInst>(&I);
+        if (CI == nullptr) return nullptr;
+        auto calledFunPtr = CI->getCalledFunction();
+        string funName    = calledFunPtr->getName().str();
+        if (funName != tracePointFunName) return nullptr;
+        auto llvm_operand = cast<ConstantExpr>(CI->getArgOperand(0));
+        auto func_operand = cast<GlobalVariable>(llvm_operand->getOperand(0));
+        auto llvm_array   = cast<ConstantDataArray>(func_operand->getInitializer());
+        auto llvm_string  = llvm_array->getAsString();
+        string argument   = llvm_string.str();
+        argument.resize(argument.size() - 1); // remove trailing '\00'
+        return new TracePoint(argument);
+    }
 
     map<TracePoint, Vertex> find(Module &M, map<BasicBlock *, Vertex> &blockIdx)
     {
@@ -113,23 +150,11 @@ public:
         return mapUnion(tracepoints, blockIdx);
     }
 
-    string getTracepointName(CallInst& CI) {
-        auto llvm_operand = cast<ConstantExpr>(CI.getArgOperand(0));
-        auto func_operand = cast<GlobalVariable>(llvm_operand->getOperand(0));
-        auto llvm_array   = cast<ConstantDataArray>(func_operand->getInitializer());
-        auto llvm_string  = llvm_array->getAsString();
-        string argument   = llvm_string.str();
-
-        return argument.substr(0, argument.size() - 1); // remove trailing '\00'    
-    }
-
     void visitCallInst(CallInst& CI) { 
         BasicBlock *curBlock = CI.getParent();
-        string name_fun = CI.getCalledFunction()->getName().str();
-        if (name_fun == tp_name) {
-            TracePoint tp = getTracepointName(CI);
-            tracepoints[tp] = curBlock;
-        }
+        TracePoint *tp = getTracePoint(CI);
+        if (tp != nullptr)
+            tracepoints[*tp] = curBlock;
     }
 };
 
@@ -245,6 +270,8 @@ private:
 SearchingState runSearch(Module &M, TracePoint start_tp, TracePoint final_tp)
 {
     SearchingState state = SearchingState();
+    auto BS = BlocksSplitter();
+    BS.split(M);
     auto GC = GraphCreator();
     Graph graph = GC.create(M);
 
