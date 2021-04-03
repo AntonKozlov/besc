@@ -7,6 +7,7 @@
 
 #include <iostream>
 #include <vector>
+#include <set>
 #include <map>
 
 using namespace llvm;
@@ -81,7 +82,9 @@ private:
     Graph graph;
     map<BasicBlock *, Vertex> blockIdx;
     map<BasicBlock *, FunName> calledFun;
+    map<TracePoint, BasicBlock *> label;
     unsigned int amtBlocks = 0;
+    inline static string tracePointFunName = "besc_tracepoint";
 
 public:
     GraphCreator(Module &M) { visit(M); }
@@ -91,6 +94,8 @@ public:
     map<BasicBlock *, Vertex> getBlockIdx() { return blockIdx; }
 
     map<Vertex, FunName> getCalledFun() { return mapApply(blockIdx, calledFun); }
+
+    map<TracePoint, Vertex> getLabel() { return mapUnion(label, blockIdx); }
 
     void visitBasicBlock(BasicBlock& BB_)
     {
@@ -108,7 +113,16 @@ public:
             }
             else if (auto *CI = dyn_cast<CallInst>(I))
             {
-                calledFun[BB] = FunName(CI->getCalledFunction()->getName().str());
+                auto funName = FunName(CI->getCalledFunction()->getName().str());
+
+                if (funName == tracePointFunName)
+                {
+                    label[getTracePoint(CI)] = BB;
+                }
+                else
+                {
+                    calledFun[BB] = funName;
+                }
             }
         }
     }
@@ -126,6 +140,16 @@ private:
     void addEdge(BasicBlock *fromBB, BasicBlock *toBB)
     {
         graph[blockIdx[fromBB]].push_back(blockIdx[toBB]);
+    }
+
+    TracePoint getTracePoint(CallInst *CI) {
+        auto llvm_operand = cast<ConstantExpr>(CI->getArgOperand(0));
+        auto func_operand = cast<GlobalVariable>(llvm_operand->getOperand(0));
+        auto llvm_array   = cast<ConstantDataArray>(func_operand->getInitializer());
+        auto llvm_string  = llvm_array->getAsString();
+        auto argument     = llvm_string.str();
+        argument.resize(argument.size() - 1); // remove trailing '\00'
+        return TracePoint(argument);
     }
 };
 
@@ -152,45 +176,6 @@ public:
     }
 };
 
-// find tracepoints in Module
-class TracePointFinder : public InstVisitor<TracePointFinder> {
-
-private:
-    map<TracePoint, BasicBlock *> tracepoints;
-    inline static string tracePointFunName = "besc_tracepoint";
-
-public:
-    TracePointFinder() {}
-
-    TracePoint* getTracePoint(Instruction& I) {
-        auto *CI          = dyn_cast<CallInst>(&I);
-        if (CI == nullptr) return nullptr;
-        auto calledFunPtr = CI->getCalledFunction();
-        string funName    = calledFunPtr->getName().str();
-        if (funName != tracePointFunName) return nullptr;
-        auto llvm_operand = cast<ConstantExpr>(CI->getArgOperand(0));
-        auto func_operand = cast<GlobalVariable>(llvm_operand->getOperand(0));
-        auto llvm_array   = cast<ConstantDataArray>(func_operand->getInitializer());
-        auto llvm_string  = llvm_array->getAsString();
-        string argument   = llvm_string.str();
-        argument.resize(argument.size() - 1); // remove trailing '\00'
-        return new TracePoint(argument);
-    }
-
-    map<TracePoint, Vertex> find(Module &M, map<BasicBlock *, Vertex> &blockIdx)
-    {
-        visit(M);
-        return mapUnion(tracepoints, blockIdx);
-    }
-
-    void visitCallInst(CallInst& CI) { 
-        BasicBlock *curBlock = CI.getParent();
-        TracePoint *tp = getTracePoint(CI);
-        if (tp != nullptr)
-            tracepoints[*tp] = curBlock;
-    }
-};
-
 // TODO: add priority output
 // pretty print of SearchingState
 ostream &operator<<(ostream &out, const SearchingState state)
@@ -207,6 +192,13 @@ ostream &operator<<(ostream &out, const SearchingState state)
 // find loops in graph
 class CyclesChecker
 {
+public:
+    struct DfsStatus
+    {
+        bool reached_final_tp;
+        bool avoided_final_tp;
+        bool loop_found;
+    };
 
 private:
     enum Color
@@ -215,61 +207,98 @@ private:
         Grey,
         Black,
     };
-
-    struct DfsStatus
-    {
-        bool reached_final_tp;
-        bool avoided_final_tp;
-        bool loop_found;
-        Color color = White;
-    };
     Graph graph;
+    map<TracePoint, Vertex> label;
+    map<Vertex, FunName> calledFun;
+    vector<Color> color;
     vector<Vertex> dfs_stack;
-    map<TracePoint, Vertex> labels;
-
-public:
+    set<FunName> dfsFunStack;
     vector<DfsStatus> status;
 
-    CyclesChecker(Graph &graph_, map<TracePoint, Vertex> &labels_)
+public:
+    CyclesChecker(Graph& graph_, map<TracePoint, Vertex>& label_, map<Vertex, FunName>& calledFun_)
     {
         graph = graph_;
-        labels = labels_;
+        label = label_;
+        calledFun = calledFun_;
     }
 
-    void check(TracePoint start_tp, TracePoint final_tp)
+    DfsStatus check(TracePoint start_tp, TracePoint final_tp)
     {
         clear();
-        dfs(labels[start_tp], labels[final_tp]);
+        for (auto v = 0; v < graph.size(); v++) {
+            cout << v << ":";
+            for (auto to : graph[v]) cout << " " << to;
+            if (calledFun.find(v) != calledFun.end()) cout << "   (call " << calledFun[v] << ")";
+            cout << endl;
+        }
+        cout << endl;
+        for (auto [tp, v] : label) cout << tp << " -> " << v << endl;
+        cout << endl;
+        // TODO here must be something like `dfsCalledFuns.insert(function[start_tp])`
+        return dfs(label[start_tp], label[final_tp]);
     }
 
 private:
     void clear() {
+        color.assign(graph.size(), White);
+        dfs_stack.clear();
+        dfsFunStack.clear();
         status.assign(graph.size(), DfsStatus());
     }
 
-    void dfs(Vertex v, Vertex final_v)
+    DfsStatus dfs(Vertex v, Vertex final_v)
     {
+        cout << "> " << v << endl;
         if (v == final_v)
         {
             status[v].reached_final_tp = true;
             status[v].avoided_final_tp = false;
-            status[v].color = Black;
-            return;
+            status[v].loop_found = false;
+            color[v] = Black;
+            return status[v];
         }
 
-        status[v].reached_final_tp = false;
-        status[v].avoided_final_tp = graph[v].empty();
-        status[v].loop_found = false;
-        status[v].color = Grey;
+        if (calledFun.find(v) != calledFun.end() && dfsFunStack.find(calledFun[v]) != dfsFunStack.end())
+        {
+            cout << "c" << endl;
+            status[v].reached_final_tp = false;
+            status[v].avoided_final_tp = false;
+            status[v].loop_found = true;
+        }
+        else if (calledFun.find(v) != calledFun.end() && dfsFunStack.find(calledFun[v]) == dfsFunStack.end())
+        {
+            cout << "v" << endl;
+            auto funName    = calledFun[v];
+            auto funEntryTP = TracePoint(funName + "_entry");
+            auto funExitTP  = TracePoint(funName + "_exit");
+            auto funEntryV  = label[funEntryTP];
+            auto funExitV   = label[funExitTP];
+            dfsFunStack.insert(funName);
+
+            status[v] = dfs(funEntryV, funExitV);
+
+            dfsFunStack.erase(funName);
+        }
+        else
+        {
+            cout << "n" << endl;
+            status[v].reached_final_tp = false;
+            status[v].avoided_final_tp = graph[v].empty();
+            status[v].loop_found = false;
+        }
+
+        color[v] = Grey;
         dfs_stack.push_back(v);
         for (Vertex to : graph[v])
         {
-            if (status[to].color == White)
+            cout << "? " << to << endl;
+            if (color[to] == White)
             {
                 dfs(to, final_v);
             }
 
-            if (status[to].color == Grey)
+            if (color[to] == Grey)
             {
                 // You can modify that part of dfs to mark cycles and retrieve
                 // info about them
@@ -280,7 +309,7 @@ private:
                 status[to].loop_found = true;
             }
 
-            if (status[to].color == Black)
+            if (color[to] == Black)
             {
                 if (status[to].reached_final_tp)
                 {
@@ -291,7 +320,9 @@ private:
             }
         }
         dfs_stack.pop_back();
-        status[v].color = Black;
+        color[v] = Black;
+        cout << "< " << v << endl;
+        return status[v];
     }
 };
 
@@ -304,11 +335,11 @@ SearchingState runSearch(Module &M, TracePoint start_tp, TracePoint final_tp)
 
     auto GC = GraphCreator(M);
     auto graph = GC.getGraph();
-    auto blockIdx = GC.getBlockIdx();
-    auto labels = TracePointFinder().find(M, blockIdx);
+    auto calledFun = GC.getCalledFun();
+    auto label = GC.getLabel();
 
-    state.StartTPNotFound = labels.find(start_tp) == labels.end();
-    state.FinalTPNotFound = labels.find(final_tp) == labels.end();
+    state.StartTPNotFound = label.find(start_tp) == label.end();
+    state.FinalTPNotFound = label.find(final_tp) == label.end();
 
     // Early return to avoid pointless loops finding, etc.
     if (state.StartTPNotFound || state.FinalTPNotFound)
@@ -319,12 +350,12 @@ SearchingState runSearch(Module &M, TracePoint start_tp, TracePoint final_tp)
     // LoopsFinder still has to collect info about final tp reachability,
     // so we reuse it as a side effect.
     // TODO: save results in LoopsFinder and use them here
-    auto cyclesChecker = CyclesChecker(graph, labels);
-    cyclesChecker.check(start_tp, final_tp);
+    auto cyclesChecker = CyclesChecker(graph, label, calledFun);
+    auto ccStatus = cyclesChecker.check(start_tp, final_tp);
 
-    state.LoopFound = cyclesChecker.status[labels[start_tp]].loop_found;
-    state.FinalTPUnreachable = ! cyclesChecker.status[labels[start_tp]].reached_final_tp;
-    state.FinalTPAvoidable = cyclesChecker.status[labels[start_tp]].avoided_final_tp;
+    state.LoopFound = ccStatus.loop_found;
+    state.FinalTPUnreachable = ! ccStatus.reached_final_tp;
+    state.FinalTPAvoidable = ccStatus.avoided_final_tp;
     return state;
 }
 
