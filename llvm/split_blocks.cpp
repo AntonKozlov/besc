@@ -12,61 +12,34 @@
 using namespace llvm;
 using namespace std;
 
-typedef string TracePoint;
 
-
-class SimpleVisitor : public InstVisitor<SimpleVisitor> {
+// split blocks by calling functions
+class BlocksSplitter : public InstVisitor<BlocksSplitter> {
 
 public:
-    void visitBasicBlock(BasicBlock &bb) {
-        for (auto i = bb.begin(); i != bb.end();) {
-            Instruction *Inst = &*i++;
-            bb.printAsOperand(errs(), false); 
-            cout << " " << Inst->getOpcodeName() << endl;
-        }
+    BlocksSplitter() {}
+
+    void split(Module& M) {
+        visit(M);
     }
-};
 
-
-class SplittingVisitor : public InstVisitor<SplittingVisitor> {
-
-private:
-    inline static string name_fun_tp = "besc_tracepoint_";
-    inline static int name_fun_tp_len = name_fun_tp.length();
-
-public:
     void visitBasicBlock(BasicBlock& BB) {
-        auto I = BB.begin(); ++I;
+        auto I = BB.begin();
+        ++I; // we mustn't do anything with the first instruction
         for (; I != BB.end(); I++) {
             if (isa<CallInst>(*I)) {
-                string name_fun = cast<CallInst>(*I).getCalledFunction()->getName().str();
-                if (name_fun.substr(0, name_fun_tp_len) == name_fun_tp) {
-                    visitBasicBlock(*BB.splitBasicBlock(I));
-                    return;
-                }
+                visitBasicBlock(*BB.splitBasicBlock(I));
+                return;
             }
         }
     }
 };
 
-
-int main_(Module& M) {
-    auto SV = SimpleVisitor();
-    auto SpV = SplittingVisitor();
-    SV.visit(M);
-    cout << endl;
-    SpV.visit(M);
-    cout << endl;
-    SV.visit(M);
-    return 0;
-}
-
-
 int main(int argc, char **argv) {
-    // if (argc != 4) {
-    //     cerr << "Usage: " << argv[0] << " <IR file> <Start tracepoint> <Final tracepoint>\n";
-    //     return 1;
-    // }
+    if (argc < 2 || 3 < argc) {
+        cerr << "Usage: " << argv[0] << " <input IR file> [<output file>]\n";
+        return 1;
+    }
 
     // Parse the input LLVM IR file into a module.
     SMDiagnostic Err;
@@ -76,10 +49,13 @@ int main(int argc, char **argv) {
         Err.print(argv[0], errs());
         return 1;
     }
-    main_(*Mod);
 
-    // dump module
-    // const char *Path = "simple.s"; 
-    // int ans = LLVMWriteBitcodeToFile(Mod, Path);   
+    auto BS = BlocksSplitter();
+    BS.split(*Mod);
+
+    std::error_code EC;
+    raw_ostream *out = new raw_fd_ostream(argv[argc - 1], EC, sys::fs::OpenFlags());
+    Mod->print(*out, nullptr);
+
     return 0;
 }

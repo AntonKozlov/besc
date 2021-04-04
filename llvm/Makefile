@@ -1,6 +1,6 @@
 .PRECIOUS : tests/%.ll
 
-all : check_cycles test
+all : split_blocks check_cycles test
 
 test : check_cycles
 
@@ -24,12 +24,16 @@ check_cycles : check_cycles.cpp
 insert_tracepoints : insert_tracepoints.cpp
 	$(CXX) -O3 -Wall -std=c++14 $< $(shell llvm-config --cxxflags --ldflags --libs --system-libs) -o $@
 
+split_blocks : split_blocks.cpp
+	$(CXX) -O3 -Wall -std=c++14 $< $(shell llvm-config --cxxflags --ldflags --libs --system-libs) -o $@
+
 TESTS=$(patsubst tests/%.c,%,$(wildcard tests/*.c))
 
 test: $(TESTS:%=do-%)
 
 tests/%.ll : tests/%.c
 	clang -Wno-implicit-function-declaration -emit-llvm -S $< -o $@
+	./split_blocks $@
 
 test-rules = do-$1 : tests/$1.ll check_cycles
 

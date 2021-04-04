@@ -153,29 +153,6 @@ private:
     }
 };
 
-// split blocks by calling functions
-class BlocksSplitter : public InstVisitor<BlocksSplitter>
-{
-
-public:
-    BlocksSplitter() {}
-
-    void split(Module& M) {
-        visit(M);
-    }
-
-    void visitBasicBlock(BasicBlock& BB) {
-        auto I = BB.begin();
-        ++I; // we mustn't do anything with the first instruction
-        for (; I != BB.end(); I++) {
-            if (isa<CallInst>(*I)) {
-                visitBasicBlock(*BB.splitBasicBlock(I));
-                return;
-            }
-        }
-    }
-};
-
 // TODO: add priority output
 // pretty print of SearchingState
 ostream &operator<<(ostream &out, const SearchingState state)
@@ -351,8 +328,6 @@ private:
 SearchingState runSearch(Module &M, TracePoint start_tp, TracePoint final_tp)
 {
     SearchingState state = SearchingState();
-    auto BS = BlocksSplitter();
-    BS.split(M);
 
     auto GC = GraphCreator(M);
     auto graph = GC.getGraph();

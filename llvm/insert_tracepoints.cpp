@@ -74,16 +74,14 @@ struct BESCVisitor : public InstVisitor<BESCVisitor> {
 };
 
 int main(int argc, char **argv) {
-    if (argc < 2) {
-        cerr << "Usage: " << argv[0] << " <IR file>\n";
+    if (argc < 2 || 3 < argc) {
+        cerr << "Usage: " << argv[0] << " <input IR file> [<output file>]\n";
         return 1;
     }
 
-    char *input_filename = argv[1];
-
     SMDiagnostic Err;
     LLVMContext Context;
-    unique_ptr <Module> Mod(parseIRFile(input_filename, Err, Context));
+    unique_ptr <Module> Mod(parseIRFile(argv[1], Err, Context));
     if (!Mod) {
         Err.print(argv[0], errs());
         return 1;
@@ -93,7 +91,7 @@ int main(int argc, char **argv) {
     visitor.visit(*Mod);
 
     std::error_code EC;
-    raw_ostream *out = new raw_fd_ostream(input_filename, EC, sys::fs::OpenFlags());
+    raw_ostream *out = new raw_fd_ostream(argv[argc - 1], EC, sys::fs::OpenFlags());
     Mod->print(*out, nullptr);
 
     return 0;
