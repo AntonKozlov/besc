@@ -64,6 +64,34 @@ $(call test-rules,test6)
 	./check_cycles $< 2 main_exit ; [ $$? = 2 ]
 	./check_cycles $< main_entry main_exit ; [ $$? = 2 ]
 
+$(call test-rules,test7)
+	./check_cycles $< main_entry main_exit ; [ $$? = 3 ]
+	./check_cycles $< main_entry 1 ; [ $$? = 1 ]
+	./check_cycles $< 3 main_exit
+	./check_cycles $< 3 2
+
+$(call test-rules,test8)
+	./check_cycles $< main_entry f_entry
+	./check_cycles $< main_entry f_exit ; [ $$? = 2 ]
+	./check_cycles $< main_entry main_1 ; [ $$? = 2 ]
+	./check_cycles $< main_1 g_entry
+	./check_cycles $< main_1 g_1
+	./check_cycles $< main_1 g_exit
+	./check_cycles $< main_1 main_2
+	./check_cycles $< main_2 h_entry
+	./check_cycles $< main_2 h_exit ; [ $$? = 2 ]
+	./check_cycles $< main_2 main_3 ; [ $$? = 2 ]
+	./check_cycles $< main_3 q_entry
+	./check_cycles $< main_3 q_1 ; [ $$? = 1 ]
+	./check_cycles $< main_3 q_2 ; [ $$? = 1 ]
+	./check_cycles $< q_2 g_entry
+	./check_cycles $< q_2 g_1
+	./check_cycles $< q_2 g_exit
+	./check_cycles $< q_2 q_exit
+	./check_cycles $< q_1 g_1 ; [ $$? = 5 ]
+	./check_cycles $< main_3 main_exit
+	./check_cycles $< main_entry main_exit ; [ $$? = 2 ]
+
 clean:
 	rm -f *.o check_cycles tests/*.ll
 
