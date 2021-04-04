@@ -197,7 +197,8 @@ public:
     {
         bool reached_final_tp;
         bool avoided_final_tp;
-        bool loop_found;
+        bool loop_on_trace_found;
+        bool real_loop_found;
     };
 
 private:
@@ -207,12 +208,13 @@ private:
         Grey,
         Black,
     };
+
     Graph graph;
     map<TracePoint, Vertex> label;
     map<Vertex, FunName> calledFun;
+
     vector<Color> color;
     vector<Vertex> dfs_stack;
-    set<FunName> dfsFunStack;
     vector<DfsStatus> status;
 
     Vertex final_v;
@@ -230,7 +232,6 @@ public:
         clear();
         auto start_v = label[start_tp];
         final_v = label[final_tp];
-        // TODO here must be something like `dfsCalledFuns.insert(function[start_tp])`
         dfs(start_v);
         return status[start_v];
     }
@@ -239,7 +240,6 @@ private:
     void clear() {
         color.assign(graph.size(), White);
         dfs_stack.clear();
-        dfsFunStack.clear();
         status.assign(graph.size(), DfsStatus());
     }
 
@@ -249,52 +249,63 @@ private:
         {
             status[v].reached_final_tp = true;
             status[v].avoided_final_tp = false;
-            status[v].loop_found = false;
+            status[v].loop_on_trace_found = false;
+            status[v].real_loop_found = false;
             color[v] = Black;
             return;
         }
 
-        if (calledFun.find(v) != calledFun.end() && dfsFunStack.find(calledFun[v]) != dfsFunStack.end())
-        {
-            status[v].reached_final_tp = false;
-            status[v].avoided_final_tp = false;
-            status[v].loop_found = true;
-        }
-        else if (calledFun.find(v) != calledFun.end() && dfsFunStack.find(calledFun[v]) == dfsFunStack.end())
+        status[v].reached_final_tp = false;
+        status[v].avoided_final_tp = graph[v].empty();
+        status[v].loop_on_trace_found = false;
+        status[v].real_loop_found = false;
+        color[v] = Grey;
+        dfs_stack.push_back(v);
+
+        if (calledFun.find(v) != calledFun.end())
         {
             auto funName    = calledFun[v];
             auto funEntryTP = TracePoint(funName + "_entry");
+            auto funExitTP  = TracePoint(funName + "_exit");
             auto funEntryV  = label[funEntryTP];
-            dfsFunStack.insert(funName);
+            auto funExitV   = label[funExitTP];
+            auto to = funEntryV;
 
-            dfs(funEntryV);
-
-            dfsFunStack.erase(funName);
-
-            if (status[funEntryV].reached_final_tp)
+            if (color[to] == White)
             {
-                status[v].reached_final_tp = true;
-                status[v].avoided_final_tp = status[funEntryV].avoided_final_tp;
-                status[v].loop_found = status[funEntryV].loop_found;
-                color[v] = Black;
-                return;
+                dfs(to);
             }
-            else
+
+            if (color[to] == Grey)
             {
-                status[v].reached_final_tp = false;
-                status[v].avoided_final_tp = graph[v].empty();
-                status[v].loop_found = status[funEntryV].loop_found;
+                for (auto w = dfs_stack.rbegin(); *w != to; w++)
+                {
+                    status[*w].real_loop_found = true;
+                }
+                status[to].real_loop_found = true;
+            }
+
+            if (color[to] == Black)
+            {
+                if (status[to].reached_final_tp)
+                {
+                    status[v].reached_final_tp = true;
+                    status[v].avoided_final_tp = status[to].avoided_final_tp;
+                    status[v].loop_on_trace_found = status[to].loop_on_trace_found;
+                    status[v].real_loop_found = status[to].real_loop_found;
+                    color[v] = Black;
+                    return;
+                }
+                else
+                {
+                    status[v].reached_final_tp = false;
+                    status[v].avoided_final_tp = graph[v].empty();
+                    status[v].loop_on_trace_found = status[to].real_loop_found;
+                    status[v].real_loop_found = status[to].real_loop_found;
+                }
             }
         }
-        else
-        {
-            status[v].reached_final_tp = false;
-            status[v].avoided_final_tp = graph[v].empty();
-            status[v].loop_found = false;
-        }
 
-        color[v] = Grey;
-        dfs_stack.push_back(v);
         for (Vertex to : graph[v])
         {
             if (color[to] == White)
@@ -308,9 +319,9 @@ private:
                 // info about them
                 for (auto w = dfs_stack.rbegin(); *w != to; w++)
                 {
-                    status[*w].loop_found = true;
+                    status[*w].real_loop_found = true;
                 }
-                status[to].loop_found = true;
+                status[to].real_loop_found = true;
             }
 
             if (color[to] == Black)
@@ -318,11 +329,19 @@ private:
                 if (status[to].reached_final_tp)
                 {
                     status[v].reached_final_tp = true;
-                    status[v].loop_found |= status[to].loop_found;
+                    status[v].avoided_final_tp |= status[to].avoided_final_tp;
+                    status[v].loop_on_trace_found =
+                        status[to].loop_on_trace_found || status[to].real_loop_found;
+                    status[v].real_loop_found |= status[to].real_loop_found;
                 }
-                status[v].avoided_final_tp |= status[to].avoided_final_tp;
+                else
+                {
+                    status[v].avoided_final_tp |= status[to].avoided_final_tp;
+                    status[v].real_loop_found |= status[to].real_loop_found;
+                }
             }
         }
+
         dfs_stack.pop_back();
         color[v] = Black;
     }
@@ -355,7 +374,7 @@ SearchingState runSearch(Module &M, TracePoint start_tp, TracePoint final_tp)
     auto cyclesChecker = CyclesChecker(graph, label, calledFun);
     auto ccStatus = cyclesChecker.check(start_tp, final_tp);
 
-    state.LoopFound = ccStatus.loop_found;
+    state.LoopFound = ccStatus.loop_on_trace_found;
     state.FinalTPUnreachable = ! ccStatus.reached_final_tp;
     state.FinalTPAvoidable = ccStatus.avoided_final_tp;
     return state;
