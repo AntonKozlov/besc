@@ -92,6 +92,14 @@ $(call test-rules,test8)
 	./check_cycles $< main_3 main_exit
 	./check_cycles $< main_entry main_exit ; [ $$? = 2 ]
 
+$(call test-rules,test9)
+	./check_cycles $< main_entry main_exit
+	./check_cycles $< main_1 main_2
+	./check_cycles $< main_3 main_4
+	./check_cycles $< main_1 main_3 ; [ $$? = 5 ]
+	./check_cycles $< main_1 main_4 ; [ $$? = 5 ]
+	./check_cycles $< main_entry f_1
+
 clean:
 	rm -f *.o check_cycles tests/*.ll
 
