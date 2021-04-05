@@ -1,6 +1,6 @@
 .PRECIOUS : tests/%.ll
 
-all : test
+all : in_docker
 
 docker_image_name = besc
 docker_image_file = .docker_image
@@ -15,7 +15,9 @@ in_docker : .docker_image
         --rm \
         -v $(shell pwd):$(docker_container_workdir) \
         -w $(docker_container_workdir) \
-        $(docker_image_name) make
+        $(docker_image_name) make without_docker
+
+without_docker : test
 
 
 exec_files_dir = build
@@ -116,10 +118,10 @@ $(call test-rules,test9)
 	$(run_check_cycles) $< main_1 main_4 ; [ $$? = 5 ]
 	$(run_check_cycles) $< main_entry f_1
 
-clean :
-	rm -rf $(exec_files_dir) tests/*.ll
 
-clean_docker :
+clean :
 	sudo rm -rf $(exec_files_dir) tests/*.ll
+
+deep_clean : clean
 	docker rmi $(docker_image_name)
 	rm -f $(docker_image_file)
