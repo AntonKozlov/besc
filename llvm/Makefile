@@ -38,19 +38,22 @@ $(eval $(foreach cpp_file_name,$(cpp_file_names),$(call compile_exec_file,$(cpp_
 
 test : $(patsubst tests/%.c,do-%,$(wildcard tests/*.c))
 
-tests/%.ll : tests/%.c $(split_blocks)
+tests/%.ll : tests/%.c $(split_blocks) $(insert_tracepoints)
 	clang -Wno-implicit-function-declaration -emit-llvm -S $< -o $@
+	$(run_insert_tracepoints) $@
 	$(run_split_blocks) $@
 
 test-rules = do-$(1) : tests/$(1).ll $(check_cycles)
 
 
 $(call test-rules,test1)
-	$(run_check_cycles) $< main_entry main_exit ; [ $$? = 3 ]
+	$(run_check_cycles) $< main_entry 2 ; [ $$? = 3 ]
+	$(run_check_cycles) $< main_entry main_exit ; [ $$? = 2 ]
 
 $(call test-rules,test2)
-	$(run_check_cycles) $< main_entry 2
-	$(run_check_cycles) $< main_entry main_exit ; [ $$? = 3 ]
+	$(run_check_cycles) $< main_entry 1
+	$(run_check_cycles) $< main_entry 3 ; [ $$? = 3 ]
+	$(run_check_cycles) $< main_entry main_exit ; [ $$? = 2 ]
 
 $(call test-rules,test3)
 	$(run_check_cycles) $< main_entry 1
@@ -77,7 +80,8 @@ $(call test-rules,test6)
 	$(run_check_cycles) $< main_entry main_exit ; [ $$? = 2 ]
 
 $(call test-rules,test7)
-	$(run_check_cycles) $< main_entry main_exit ; [ $$? = 3 ]
+	$(run_check_cycles) $< main_entry main_exit ; [ $$? = 2 ]
+	$(run_check_cycles) $< main_entry 4 ; [ $$? = 3 ]
 	$(run_check_cycles) $< main_entry 1 ; [ $$? = 1 ]
 	$(run_check_cycles) $< 3 main_exit
 	$(run_check_cycles) $< 3 2

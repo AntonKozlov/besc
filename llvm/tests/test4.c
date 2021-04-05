@@ -4,7 +4,6 @@
 int a;
 
 int main() {
-    besc_tracepoint("main_entry");
     if (a == 0) {
         a = 6;
     } else {
@@ -13,6 +12,5 @@ int main() {
     if (a == 3) {
         a = 5;
     }
-    besc_tracepoint("main_exit");
     return a;
 }
