@@ -103,31 +103,36 @@ std::vector <std::vector<llvm::BasicBlock * >> extractBlocksGroupedByLoops(llvm:
     return blocks_groups;
 }
 
-int main(int argc, char **argv) {
-    llvm::SMDiagnostic err;
-    llvm::LLVMContext context;
-    auto module_ptr = llvm::parseIRFile(argv[1], err, context);
-    auto &module = *module_ptr;
 
-    // Running O1 optimization pass to convert all loops in the module into some correct form
-    runO1OptimizationPass(module);
+// -----------------------
+//      Usage example:
+// -----------------------
 
-    // Iterate over all functions in the module, extract loops and their corresponding groups of basic blocks
-    for (auto &fun : module) {
-        auto block_groups = extractBlocksGroupedByLoops(fun);
-        for (auto blocks : block_groups) {
-            llvm::outs() << "New group \n";
-            for (auto block : blocks) {
-                llvm::outs() << "start block \n";
-                llvm::outs() << *block << "\n";
-                llvm::outs() << "end block \n";
-            }
-        }
-    }
-
+//int main(int argc, char **argv) {
+//    llvm::SMDiagnostic err;
+//    llvm::LLVMContext context;
+//    auto module_ptr = llvm::parseIRFile(argv[1], err, context);
+//    auto &module = *module_ptr;
+//
+//    // Running O1 optimization pass to convert all loops in the module into some correct form
+//    runO1OptimizationPass(module);
+//
+//    // Iterate over all functions in the module, extract loops and their corresponding groups of basic blocks
+//    for (auto &fun : module) {
+//        auto block_groups = extractBlocksGroupedByLoops(fun);
+//        for (auto blocks : block_groups) {
+//            llvm::outs() << "New group \n";
+//            for (auto block : blocks) {
+//                llvm::outs() << "start block \n";
+//                llvm::outs() << *block << "\n";
+//                llvm::outs() << "end block \n";
+//            }
+//        }
+//    }
+//
 //    auto manager = llvm::AnalysisManager<llvm::Module>();
 //    auto print_pass = llvm::PrintModulePass(llvm::outs());
 //    void(print_pass.run(module, manager));
-
-    return 0;
-}
+//
+//    return 0;
+//}
