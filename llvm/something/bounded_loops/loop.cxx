@@ -25,7 +25,7 @@ int main(int argc, char **argv) {
 
     auto pass_builder = llvm::PassBuilder();
     // not exactly O1
-    auto o1_fn_pass = pass_builder.buildFunctionSimplificationPipeline(llvm::PassBuilder::OptimizationLevel::O1, llvm::PassBuilder::ThinLTOPhase::None);
+    auto o1_fn_pass = pass_builder.buildFunctionSimplificationPipeline(llvm::PassBuilder::OptimizationLevel::O1, llvm::ThinOrFullLTOPhase::None);
 
     for (auto& fun : module.getFunctionList()) {
         fun.setAttributes(empty_attr_list);
