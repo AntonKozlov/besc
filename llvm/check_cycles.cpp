@@ -245,15 +245,19 @@ private:
 
             if (color[to] == White)
             {
+                // calling function
                 dfs(to);
             }
 
             if (color[to] == Grey)
             {
+                // recursion found
                 for (auto w = dfs_stack.rbegin(); *w != to; w++)
                 {
+                    status[*w].loop_on_trace_found = true;
                     status[*w].real_loop_found = true;
                 }
+                status[to].loop_on_trace_found = true;
                 status[to].real_loop_found = true;
             }
 
@@ -261,17 +265,26 @@ private:
             {
                 if (status[to].reached_final_tp)
                 {
-                    status[v].reached_final_tp = true;
-                    status[v].avoided_final_tp = status[to].avoided_final_tp;
-                    status[v].loop_on_trace_found = status[to].loop_on_trace_found;
-                    status[v].real_loop_found = status[to].real_loop_found;
+                    // we already found `final_v' and don't need to do anything after, so
+                    // we just must take right status from `to'
+                    status[v] = status[to];
                     color[v] = Black;
                     return;
                 }
                 else
                 {
-                    status[v].reached_final_tp = false;
-                    status[v].avoided_final_tp = graph[v].empty();
+                    // there isn't `final_v' in "subgraph" of called function, but, unlike
+                    // usual edges, if some loop in called function (or in called function
+                    // of called function etc.) is found, we must set both
+                    // `loop_on_trace_found' and `real_loop_found' to `true' because:
+                    //
+                    // 1) if there is `final_v' in some brunch of this vertex, we must say
+                    // that we have found loop on trace between start_v and final_v
+                    //
+                    // 2) if there isn't `final_v' in any brunch of this vertex, we
+                    // mustn't say that we have found loop, and we actually won't say that
+                    // because in this case information about loop from
+                    // `loop_on_trace_found' won't spread to parent vertices
                     status[v].loop_on_trace_found = status[to].real_loop_found;
                     status[v].real_loop_found = status[to].real_loop_found;
                 }
@@ -291,8 +304,10 @@ private:
                 // info about them
                 for (auto w = dfs_stack.rbegin(); *w != to; w++)
                 {
+                    status[*w].loop_on_trace_found = true;
                     status[*w].real_loop_found = true;
                 }
+                status[to].loop_on_trace_found = true;
                 status[to].real_loop_found = true;
             }
 
@@ -300,14 +315,26 @@ private:
             {
                 if (status[to].reached_final_tp)
                 {
+                    // we have found `final_v' in current brunch of this vertex, so we
+                    // just update status of `v' with `|=' operator because usual edges
+                    // are brunches from `br' instruction and we want to know if there is
+                    // some brunch with such property (for example for `real_loop_found'
+                    // field there is some brunch with loop)
                     status[v].reached_final_tp = true;
                     status[v].avoided_final_tp |= status[to].avoided_final_tp;
-                    status[v].loop_on_trace_found =
-                        status[to].loop_on_trace_found || status[to].real_loop_found;
+                    status[v].loop_on_trace_found |= status[to].loop_on_trace_found;
                     status[v].real_loop_found |= status[to].real_loop_found;
                 }
                 else
                 {
+                    // here we must update information:
+                    //
+                    // 1) `avoided_final_tp' because we can found vertex without any
+                    // output edges (we don't set `true' immediately because we can't
+                    // arrive such vertex when we are in loop, for example)
+                    //
+                    // 2) `real_loop_found' because this field is `true' if we have found
+                    // some loop and it doesn't matter where
                     status[v].avoided_final_tp |= status[to].avoided_final_tp;
                     status[v].real_loop_found |= status[to].real_loop_found;
                 }
