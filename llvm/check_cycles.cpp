@@ -81,7 +81,7 @@ class GraphCreator : public InstVisitor<GraphCreator>
 private:
     Graph graph;
     map<BasicBlock *, Vertex> blockIdx;
-    map<BasicBlock *, FunName> calledFun;
+    map<BasicBlock *, BasicBlock *> calledFun;
     map<TracePoint, BasicBlock *> label;
     unsigned int amtBlocks = 0;
     inline static string tracePointFunName = "besc_tracepoint";
@@ -93,7 +93,10 @@ public:
 
     map<BasicBlock *, Vertex> getBlockIdx() { return blockIdx; }
 
-    map<Vertex, FunName> getCalledFun() { return mapApply(blockIdx, calledFun); }
+    map<Vertex, Vertex> getCalledFun() {
+        auto middle_map = mapApply(blockIdx, calledFun);
+        return mapUnion(middle_map, blockIdx);
+    }
 
     map<TracePoint, Vertex> getLabel() { return mapUnion(label, blockIdx); }
 
@@ -121,7 +124,7 @@ public:
                 }
                 else
                 {
-                    calledFun[BB] = funName;
+                    calledFun[BB] = &CI->getCalledFunction()->getEntryBlock();
                 }
             }
         }
@@ -187,8 +190,7 @@ private:
     };
 
     Graph graph;
-    map<TracePoint, Vertex> label;
-    map<Vertex, FunName> calledFun;
+    map<Vertex, Vertex> calledFun;
 
     vector<Color> color;
     vector<Vertex> dfs_stack;
@@ -197,20 +199,18 @@ private:
     Vertex final_v;
 
 public:
-    CyclesChecker(Graph& graph_, map<TracePoint, Vertex>& label_, map<Vertex, FunName>& calledFun_)
+    CyclesChecker(Graph& graph_, map<Vertex, Vertex>& calledFun_)
     {
         graph = graph_;
-        label = label_;
         calledFun = calledFun_;
     }
 
-    DfsStatus check(TracePoint start_tp, TracePoint final_tp)
+    DfsStatus check(Vertex start_v_, Vertex final_v_)
     {
         clear();
-        auto start_v = label[start_tp];
-        final_v = label[final_tp];
-        dfs(start_v);
-        return status[start_v];
+        final_v = final_v_;
+        dfs(start_v_);
+        return status[start_v_];
     }
 
 private:
@@ -241,12 +241,7 @@ private:
 
         if (calledFun.find(v) != calledFun.end())
         {
-            auto funName    = calledFun[v];
-            auto funEntryTP = TracePoint(funName + "_entry");
-            auto funExitTP  = TracePoint(funName + "_exit");
-            auto funEntryV  = label[funEntryTP];
-            auto funExitV   = label[funExitTP];
-            auto to = funEntryV;
+            auto to = calledFun[v];
 
             if (color[to] == White)
             {
@@ -343,11 +338,14 @@ SearchingState runSearch(Module &M, TracePoint start_tp, TracePoint final_tp)
         return state;
     }
 
+    auto start_v = label[start_tp];
+    auto final_v = label[final_tp];
+
     // LoopsFinder still has to collect info about final tp reachability,
     // so we reuse it as a side effect.
     // TODO: save results in LoopsFinder and use them here
-    auto cyclesChecker = CyclesChecker(graph, label, calledFun);
-    auto ccStatus = cyclesChecker.check(start_tp, final_tp);
+    auto cyclesChecker = CyclesChecker(graph, calledFun);
+    auto ccStatus = cyclesChecker.check(start_v, final_v);
 
     state.LoopFound = ccStatus.loop_on_trace_found;
     state.FinalTPUnreachable = ! ccStatus.reached_final_tp;
