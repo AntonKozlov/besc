@@ -1,6 +1,6 @@
 .idea/
 *.o
 cmake-build-debug/
+/llvm/build/
 /llvm/tests/*.ll
-/llvm/check_cycles
-/llvm/.docker-image
+/llvm/.docker_image

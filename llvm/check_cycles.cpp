@@ -7,14 +7,18 @@
 
 #include <iostream>
 #include <vector>
+#include <set>
 #include <map>
 
 using namespace llvm;
 using namespace std;
 
 typedef string TracePoint;
-typedef unsigned Vertex;
+typedef unsigned int Vertex;
 typedef vector<vector<Vertex>> Graph;
+typedef unsigned int Index;
+typedef Index Size;
+typedef string FunName;
 
 // status of trace searching
 class SearchingState
@@ -43,7 +47,7 @@ public:
 };
 
 template <class T1, class T2, class T3>
-map<T1, T3> mapUnion(map<T1, T2> &map_1, map<T2, T3> &map_2)
+map<T1, T3> mapUnion(map<T1, T2>& map_1, map<T2, T3>& map_2)
 {
     map<T1, T3> res_map;
     for (auto [key_1, key_2] : map_1)
@@ -56,6 +60,20 @@ map<T1, T3> mapUnion(map<T1, T2> &map_1, map<T2, T3> &map_2)
     return res_map;
 }
 
+template <class T1, class T2, class T3>
+map<T2, T3> mapApply(map<T1, T2>& map_1, map<T1, T3>& map_2)
+{
+    map<T2, T3> res_map;
+    for (auto [key, value] : map_2)
+    {
+        if (map_1.find(key) != map_1.end())
+        {
+            res_map[map_1[key]] = value;
+        }
+    }
+    return res_map;
+}
+
 // create graph of Module
 class GraphCreator : public InstVisitor<GraphCreator>
 {
@@ -63,73 +81,78 @@ class GraphCreator : public InstVisitor<GraphCreator>
 private:
     Graph graph;
     map<BasicBlock *, Vertex> blockIdx;
-    unsigned amtBlocks;
+    map<BasicBlock *, BasicBlock *> calledFun;
+    map<TracePoint, BasicBlock *> label;
+    unsigned int amtBlocks = 0;
+    inline static string tracePointFunName = "besc_tracepoint";
 
 public:
-    GraphCreator() : amtBlocks(0) {}
+    GraphCreator(Module &M) { visit(M); }
 
-    Graph create(Module &M)
-    {
-        visit(M);
-        return graph;
-    }
+    Graph getGraph() { return graph; }
 
     map<BasicBlock *, Vertex> getBlockIdx() { return blockIdx; }
 
-    void visitBranchInst(BranchInst &BI)
+    map<Vertex, Vertex> getCalledFun() {
+        auto middle_map = mapApply(blockIdx, calledFun);
+        return mapUnion(middle_map, blockIdx);
+    }
+
+    map<TracePoint, Vertex> getLabel() { return mapUnion(label, blockIdx); }
+
+    void visitBasicBlock(BasicBlock& BB_)
     {
-        BasicBlock *from = BI.getParent();
-        for (BasicBlock *to : BI.successors())
+        auto *BB = &BB_;
+        addVertex(BB);
+        for (auto I = BB->begin(); I != BB->end(); I++)
         {
-            for (BasicBlock *bb : {from, to})
+            if (auto *BI = dyn_cast<BranchInst>(I))
             {
-                // if bb is not found in blockIdx
-                if (blockIdx.find(bb) == blockIdx.end())
+                for (BasicBlock *nextBB : BI->successors())
                 {
-                    blockIdx[bb] = amtBlocks;
-                    amtBlocks++;
-                    graph.push_back({});
+                    addVertex(nextBB);
+                    addEdge(BB, nextBB);
                 }
             }
-            graph[blockIdx[from]].push_back(blockIdx[to]);
+            else if (auto *CI = dyn_cast<CallInst>(I))
+            {
+                auto funName = FunName(CI->getCalledFunction()->getName().str());
+
+                if (funName == tracePointFunName)
+                {
+                    label[getTracePoint(CI)] = BB;
+                }
+                else
+                {
+                    calledFun[BB] = &CI->getCalledFunction()->getEntryBlock();
+                }
+            }
         }
     }
-};
-
-// find tracepoints in Module
-class TracePointFinder : public InstVisitor<TracePointFinder>
-{
 
 private:
-    map<TracePoint, BasicBlock *> tracepoints;
-    inline static string tp_name = "besc_tracepoint";
-
-public:
-    TracePointFinder() {}
-
-    map<TracePoint, Vertex> find(Module &M, map<BasicBlock *, Vertex> &blockIdx)
+    void addVertex(BasicBlock *BB)
     {
-        visit(M);
-        return mapUnion(tracepoints, blockIdx);
+        if (blockIdx.find(BB) == blockIdx.end())
+        {
+            blockIdx[BB] = amtBlocks++;
+            graph.push_back({});
+        }
     }
 
-    string getTracepointName(CallInst& CI) {
-        auto llvm_operand = cast<ConstantExpr>(CI.getArgOperand(0));
+    void addEdge(BasicBlock *fromBB, BasicBlock *toBB)
+    {
+        graph[blockIdx[fromBB]].push_back(blockIdx[toBB]);
+    }
+
+    TracePoint getTracePoint(CallInst *CI) {
+        auto llvm_operand = cast<ConstantExpr>(CI->getArgOperand(0));
         auto func_operand = cast<GlobalVariable>(llvm_operand->getOperand(0));
         auto llvm_array   = cast<ConstantDataArray>(func_operand->getInitializer());
         auto llvm_string  = llvm_array->getAsString();
-        string argument   = llvm_string.str();
-
-        return argument.substr(0, argument.size() - 1); // remove trailing '\00'    
-    }
-
-    void visitCallInst(CallInst& CI) { 
-        BasicBlock *curBlock = CI.getParent();
-        string name_fun = CI.getCalledFunction()->getName().str();
-        if (name_fun == tp_name) {
-            TracePoint tp = getTracepointName(CI);
-            tracepoints[tp] = curBlock;
-        }
+        auto argument     = llvm_string.str();
+        argument.resize(argument.size() - 1); // remove trailing '\00'
+        return TracePoint(argument);
     }
 };
 
@@ -147,8 +170,16 @@ ostream &operator<<(ostream &out, const SearchingState state)
 }
 
 // find loops in graph
-class LoopsFinder
+class CyclesChecker
 {
+public:
+    struct DfsStatus
+    {
+        bool reached_final_tp;
+        bool avoided_final_tp;
+        bool loop_on_trace_found;
+        bool real_loop_found;
+    };
 
 private:
     enum Color
@@ -158,116 +189,160 @@ private:
         Black,
     };
 
-    struct DfsStatus
-    {
-        bool reached_final_tp = false;
-        bool loop_found = false;
-        Color color = White;
-    };
     Graph graph;
-    vector<Vertex> dfs_stack;
-    map<TracePoint, Vertex> labels;
+    map<Vertex, Vertex> calledFun;
 
-public:
+    vector<Color> color;
+    vector<Vertex> dfs_stack;
     vector<DfsStatus> status;
 
-    LoopsFinder(Graph &graph_, map<TracePoint, Vertex> &labels_)
+    Vertex final_v;
+
+public:
+    CyclesChecker(Graph& graph_, map<Vertex, Vertex>& calledFun_)
     {
         graph = graph_;
-        labels = labels_;
-        status.assign(graph.size(), DfsStatus());
+        calledFun = calledFun_;
     }
 
-    void find(TracePoint start_tp, TracePoint final_tp)
+    DfsStatus check(Vertex start_v_, Vertex final_v_)
     {
-        dfs(labels[start_tp], labels[final_tp]);
-        return;
+        clear();
+        final_v = final_v_;
+        dfs(start_v_);
+        return status[start_v_];
     }
 
 private:
-    void dfs(Vertex v, Vertex final_v)
+    void clear() {
+        color.assign(graph.size(), White);
+        dfs_stack.clear();
+        status.assign(graph.size(), DfsStatus());
+    }
+
+    void dfs(Vertex v)
     {
         if (v == final_v)
         {
             status[v].reached_final_tp = true;
-            status[v].color = Black;
+            status[v].avoided_final_tp = false;
+            status[v].loop_on_trace_found = false;
+            status[v].real_loop_found = false;
+            color[v] = Black;
             return;
         }
 
-        status[v].color = Grey;
+        status[v].reached_final_tp = false;
+        status[v].avoided_final_tp = graph[v].empty();
+        status[v].loop_on_trace_found = false;
+        status[v].real_loop_found = false;
+        color[v] = Grey;
         dfs_stack.push_back(v);
-        for (auto to : graph[v])
+
+        if (calledFun.find(v) != calledFun.end())
         {
-            if (status[to].color == White)
+            auto to = calledFun[v];
+
+            if (color[to] == White)
             {
-                dfs(to, final_v);
+                // calling function
+                dfs(to);
             }
 
-            if (status[to].color == Grey)
+            if (color[to] == Grey)
+            {
+                // recursion found
+                for (auto w = dfs_stack.rbegin(); *w != to; w++)
+                {
+                    status[*w].loop_on_trace_found = true;
+                    status[*w].real_loop_found = true;
+                }
+                status[to].loop_on_trace_found = true;
+                status[to].real_loop_found = true;
+            }
+
+            if (color[to] == Black)
+            {
+                if (status[to].reached_final_tp)
+                {
+                    // we already found `final_v' and don't need to do anything after, so
+                    // we just must take right status from `to'
+                    status[v] = status[to];
+                    color[v] = Black;
+                    return;
+                }
+                else
+                {
+                    // there isn't `final_v' in "subgraph" of called function, but, unlike
+                    // usual edges, if some loop in called function (or in called function
+                    // of called function etc.) is found, we must set both
+                    // `loop_on_trace_found' and `real_loop_found' to `true' because:
+                    //
+                    // 1) if there is `final_v' in some brunch of this vertex, we must say
+                    // that we have found loop on trace between start_v and final_v
+                    //
+                    // 2) if there isn't `final_v' in any brunch of this vertex, we
+                    // mustn't say that we have found loop, and we actually won't say that
+                    // because in this case information about loop from
+                    // `loop_on_trace_found' won't spread to parent vertices
+                    status[v].loop_on_trace_found = status[to].real_loop_found;
+                    status[v].real_loop_found = status[to].real_loop_found;
+                }
+            }
+        }
+
+        for (Vertex to : graph[v])
+        {
+            if (color[to] == White)
+            {
+                dfs(to);
+            }
+
+            if (color[to] == Grey)
             {
                 // You can modify that part of dfs to mark cycles and retrieve
                 // info about them
                 for (auto w = dfs_stack.rbegin(); *w != to; w++)
                 {
-                    status[*w].loop_found = true;
+                    status[*w].loop_on_trace_found = true;
+                    status[*w].real_loop_found = true;
                 }
-                status[to].loop_found = true;
+                status[to].loop_on_trace_found = true;
+                status[to].real_loop_found = true;
             }
 
-            if (status[to].color == Black)
+            if (color[to] == Black)
             {
                 if (status[to].reached_final_tp)
                 {
-                    status[v].loop_found |= status[to].loop_found;
+                    // we have found `final_v' in current brunch of this vertex, so we
+                    // just update status of `v' with `|=' operator because usual edges
+                    // are brunches from `br' instruction and we want to know if there is
+                    // some brunch with such property (for example for `real_loop_found'
+                    // field there is some brunch with loop)
                     status[v].reached_final_tp = true;
+                    status[v].avoided_final_tp |= status[to].avoided_final_tp;
+                    status[v].loop_on_trace_found |= status[to].loop_on_trace_found;
+                    status[v].real_loop_found |= status[to].real_loop_found;
+                }
+                else
+                {
+                    // here we must update information:
+                    //
+                    // 1) `avoided_final_tp' because we can found vertex without any
+                    // output edges (we don't set `true' immediately because we can't
+                    // arrive such vertex when we are in loop, for example)
+                    //
+                    // 2) `real_loop_found' because this field is `true' if we have found
+                    // some loop and it doesn't matter where
+                    status[v].avoided_final_tp |= status[to].avoided_final_tp;
+                    status[v].real_loop_found |= status[to].real_loop_found;
                 }
             }
         }
+
         dfs_stack.pop_back();
-        status[v].color = Black;
-    }
-};
-
-// find path from start_tp which doesn't reach final_tp
-class FinalTPAvoidableChecker
-{
-
-private:
-    Graph graph;
-    unsigned N;
-    map<TracePoint, Vertex> labels;
-    vector<bool> used;
-
-public:
-    FinalTPAvoidableChecker(Graph &graph_, map<TracePoint, Vertex> &labels_)
-    {
-        graph = graph_;
-        N = graph.size();
-        labels = labels_;
-    }
-
-    bool check(TracePoint start_tp, TracePoint final_tp)
-    {
-        used.assign(N, false);
-        return dfs(labels[start_tp], labels[final_tp]);
-    }
-
-private:
-    bool dfs(Vertex v, Vertex final_v)
-    {
-        used[v] = true;
-        if (v == final_v)
-            return false;
-        if (graph[v].empty())
-            return true;
-        for (Vertex to : graph[v])
-        {
-            if (!used[to] and dfs(to, final_v))
-            {
-                return true;
-            }
-        }
-        return false;
+        color[v] = Black;
     }
 };
 
@@ -275,14 +350,14 @@ private:
 SearchingState runSearch(Module &M, TracePoint start_tp, TracePoint final_tp)
 {
     SearchingState state = SearchingState();
-    auto GC = GraphCreator();
-    Graph graph = GC.create(M);
 
-    auto blockIdx = GC.getBlockIdx();
-    auto labels = TracePointFinder().find(M, blockIdx);
+    auto GC = GraphCreator(M);
+    auto graph = GC.getGraph();
+    auto calledFun = GC.getCalledFun();
+    auto label = GC.getLabel();
 
-    state.StartTPNotFound = labels.find(start_tp) == labels.end();
-    state.FinalTPNotFound = labels.find(final_tp) == labels.end();
+    state.StartTPNotFound = label.find(start_tp) == label.end();
+    state.FinalTPNotFound = label.find(final_tp) == label.end();
 
     // Early return to avoid pointless loops finding, etc.
     if (state.StartTPNotFound || state.FinalTPNotFound)
@@ -290,16 +365,18 @@ SearchingState runSearch(Module &M, TracePoint start_tp, TracePoint final_tp)
         return state;
     }
 
+    auto start_v = label[start_tp];
+    auto final_v = label[final_tp];
+
     // LoopsFinder still has to collect info about final tp reachability,
     // so we reuse it as a side effect.
     // TODO: save results in LoopsFinder and use them here
-    auto loopsFinder = LoopsFinder(graph, labels);
-    loopsFinder.find(start_tp, final_tp);
+    auto cyclesChecker = CyclesChecker(graph, calledFun);
+    auto ccStatus = cyclesChecker.check(start_v, final_v);
 
-    state.LoopFound = loopsFinder.status[labels[start_tp]].loop_found;
-    state.FinalTPUnreachable = !loopsFinder.status[labels[start_tp]].reached_final_tp;
-
-    state.FinalTPAvoidable = FinalTPAvoidableChecker(graph, labels).check(start_tp, final_tp);
+    state.LoopFound = ccStatus.loop_on_trace_found;
+    state.FinalTPUnreachable = ! ccStatus.reached_final_tp;
+    state.FinalTPAvoidable = ccStatus.avoided_final_tp;
     return state;
 }
 

@@ -1,5 +1,10 @@
 #include "tracing.h"
 
+void f() {
+    int b = 5;
+    besc_tracepoint("2");
+    b++;
+}
 
 int main() {
     if (rand()) {
@@ -9,6 +14,8 @@ int main() {
     } else {
         return 1;
     }
-    besc_tracepoint("2");
+    besc_tracepoint("3");
+    f();
+    besc_tracepoint("4");
     return 0;
 }
