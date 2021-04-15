@@ -68,20 +68,34 @@ std::vector <std::vector<llvm::BasicBlock * >> extractBlocksGroupedByLoops(llvm:
     auto tli = llvm::TargetLibraryInfo(tlii);
     auto se = llvm::ScalarEvolution(fun, tli, ac, dt, loop_info);
 
-    std::function<void(llvm::Loop * )> process_loop = [&](llvm::Loop *loop) {
+    std::function<bool(llvm::Loop * )> process_loop = [&](llvm::Loop *loop) {
         auto backedge_taken = se.getBackedgeTakenCount(loop);
         auto max_backedge_taken = se.getConstantMaxBackedgeTakenCount(loop);
         auto trip_multiple = se.getSmallConstantTripMultiple(loop);
 
+        bool has_unbounded_subloop = false;
+        for (auto *subloop : loop->getSubLoops()) {
+            if (!process_loop(subloop)) {
+                has_unbounded_subloop = true;
+            }
+        }
+
+        if (has_unbounded_subloop) {
+            return false;
+        }
+
         if (backedge_taken->getSCEVType() != llvm::scCouldNotCompute
             && max_backedge_taken->getSCEVType() != llvm::scCouldNotCompute
-            && trip_multiple > 1) {
+            && trip_multiple > 1)
+        {
             blocks_groups.push_back(loop->getBlocksVector());
+            return true;
         }
+
+        return false;
 
 //        auto buf = std::string();
 //        llvm::raw_string_ostream stream(buf);
-//
 //        stream << "backedge_taken:";
 //        backedge_taken->print(stream);
 //        stream << " max_backedge_taken:";
@@ -90,10 +104,6 @@ std::vector <std::vector<llvm::BasicBlock * >> extractBlocksGroupedByLoops(llvm:
 //
 //        auto *md = llvm::MDNode::get(context, llvm::MDString::get(context, stream.str().data()));
 //        loop->getHeader()->getInstList().front().setMetadata("besc.loop.info", md);
-
-        for (auto *subloop : loop->getSubLoops()) {
-            process_loop(subloop);
-        }
     };
 
     for (auto *loop : loop_info) {
@@ -121,12 +131,15 @@ std::vector <std::vector<llvm::BasicBlock * >> extractBlocksGroupedByLoops(llvm:
 //    for (auto &fun : module) {
 //        auto block_groups = extractBlocksGroupedByLoops(fun);
 //        for (auto blocks : block_groups) {
-//            llvm::outs() << "New group \n";
+//            llvm::outs() << "------------ \n";
+//            llvm::outs() << "  New loop   \n";
+//            llvm::outs() << "------------ \n\n";
 //            for (auto block : blocks) {
-//                llvm::outs() << "start block \n";
+//                llvm::outs() << " --- start block --- \n";
 //                llvm::outs() << *block << "\n";
-//                llvm::outs() << "end block \n";
+//                llvm::outs() << " ---- end block ---- \n\n\n";
 //            }
+//            llvm::outs() << "\n";
 //        }
 //    }
 //
