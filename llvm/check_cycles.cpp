@@ -15,9 +15,7 @@ using namespace std;
 
 typedef string TracePoint;
 typedef unsigned int Vertex;
-typedef vector<vector<Vertex>> Graph;
-typedef unsigned int Index;
-typedef Index Size;
+typedef vector<vector<Vertex>> AdjacencyList;
 typedef string FunName;
 
 // status of trace searching
@@ -46,59 +44,46 @@ public:
     }
 };
 
-template <class T1, class T2, class T3>
-map<T1, T3> mapUnion(map<T1, T2>& map_1, map<T2, T3>& map_2)
-{
-    map<T1, T3> res_map;
-    for (auto [key_1, key_2] : map_1)
-    {
-        if (map_2.find(key_2) != map_2.end())
-        {
-            res_map[key_1] = map_2[key_2];
-        }
-    }
-    return res_map;
-}
 
-template <class T1, class T2, class T3>
-map<T2, T3> mapApply(map<T1, T2>& map_1, map<T1, T3>& map_2)
-{
-    map<T2, T3> res_map;
-    for (auto [key, value] : map_2)
-    {
-        if (map_1.find(key) != map_1.end())
-        {
-            res_map[map_1[key]] = value;
-        }
-    }
-    return res_map;
-}
-
-// create graph of Module
-class GraphCreator : public InstVisitor<GraphCreator>
+class Graph : public InstVisitor<Graph>
 {
 
 private:
-    Graph graph;
-    map<BasicBlock *, Vertex> blockIdx;
-    map<BasicBlock *, BasicBlock *> calledFun;
-    map<TracePoint, BasicBlock *> label;
-    unsigned int amtBlocks = 0;
-    inline static string tracePointFunName = "besc_tracepoint";
+    inline static FunName tracePointFunName = FunName("besc_tracepoint");
+
+    map<BasicBlock *, Vertex> vertex;
+    AdjacencyList alist;
+    map<Vertex, Vertex> calledFun;
+    map<TracePoint, Vertex> label;
+    size_t amtVertices = 0;
 
 public:
-    GraphCreator(Module &M) { visit(M); }
+    // without this line it isn't compiled
+    Graph() {}
 
-    Graph getGraph() { return graph; }
+    Graph(Module &M) { visit(M); }
 
-    map<BasicBlock *, Vertex> getBlockIdx() { return blockIdx; }
+    size_t amountVertices() { return amtVertices; }
 
-    map<Vertex, Vertex> getCalledFun() {
-        auto middle_map = mapApply(blockIdx, calledFun);
-        return mapUnion(middle_map, blockIdx);
+    vector<Vertex> getAdjacentVertices(Vertex v) { return alist[v]; }
+
+    Vertex* getCalledFun(Vertex v)
+    {
+        auto to_ptr = calledFun.find(v);
+        if (to_ptr == calledFun.end())
+            return nullptr;
+        else
+            return new Vertex(to_ptr->second);
     }
 
-    map<TracePoint, Vertex> getLabel() { return mapUnion(label, blockIdx); }
+    Vertex* vertexFromTracePoint(TracePoint tp)
+    {
+        auto v_ptr = label.find(tp);
+        if (v_ptr == label.end())
+            return nullptr;
+        else
+            return new Vertex(v_ptr->second);
+    }
 
     void visitBasicBlock(BasicBlock& BB_)
     {
@@ -120,11 +105,11 @@ public:
 
                 if (funName == tracePointFunName)
                 {
-                    label[getTracePoint(CI)] = BB;
+                    label[getTracePoint(CI)] = vertex[BB];
                 }
                 else
                 {
-                    calledFun[BB] = &CI->getCalledFunction()->getEntryBlock();
+                    calledFun[vertex[BB]] = vertex[&CI->getCalledFunction()->getEntryBlock()];
                 }
             }
         }
@@ -133,16 +118,16 @@ public:
 private:
     void addVertex(BasicBlock *BB)
     {
-        if (blockIdx.find(BB) == blockIdx.end())
+        if (vertex.find(BB) == vertex.end())
         {
-            blockIdx[BB] = amtBlocks++;
-            graph.push_back({});
+            vertex[BB] = amtVertices++;
+            alist.push_back({});
         }
     }
 
     void addEdge(BasicBlock *fromBB, BasicBlock *toBB)
     {
-        graph[blockIdx[fromBB]].push_back(blockIdx[toBB]);
+        alist[vertex[fromBB]].push_back(vertex[toBB]);
     }
 
     TracePoint getTracePoint(CallInst *CI) {
@@ -155,6 +140,7 @@ private:
         return TracePoint(argument);
     }
 };
+
 
 // TODO: add priority output
 // pretty print of SearchingState
@@ -190,7 +176,6 @@ private:
     };
 
     Graph graph;
-    map<Vertex, Vertex> calledFun;
 
     vector<Color> color;
     vector<Vertex> dfs_stack;
@@ -199,10 +184,9 @@ private:
     Vertex final_v;
 
 public:
-    CyclesChecker(Graph& graph_, map<Vertex, Vertex>& calledFun_)
+    CyclesChecker(Graph& graph_)
     {
         graph = graph_;
-        calledFun = calledFun_;
     }
 
     DfsStatus check(Vertex start_v_, Vertex final_v_)
@@ -215,9 +199,9 @@ public:
 
 private:
     void clear() {
-        color.assign(graph.size(), White);
+        color.assign(graph.amountVertices(), White);
         dfs_stack.clear();
-        status.assign(graph.size(), DfsStatus());
+        status.assign(graph.amountVertices(), DfsStatus());
     }
 
     void dfs(Vertex v)
@@ -233,15 +217,15 @@ private:
         }
 
         status[v].reached_final_tp = false;
-        status[v].avoided_final_tp = graph[v].empty();
+        status[v].avoided_final_tp = graph.getAdjacentVertices(v).empty();
         status[v].loop_on_trace_found = false;
         status[v].real_loop_found = false;
         color[v] = Grey;
         dfs_stack.push_back(v);
 
-        if (calledFun.find(v) != calledFun.end())
+        if (auto to_ptr = graph.getCalledFun(v))
         {
-            auto to = calledFun[v];
+            auto to = *to_ptr;
 
             if (color[to] == White)
             {
@@ -291,7 +275,7 @@ private:
             }
         }
 
-        for (Vertex to : graph[v])
+        for (Vertex to : graph.getAdjacentVertices(v))
         {
             if (color[to] == White)
             {
@@ -351,13 +335,13 @@ SearchingState runSearch(Module &M, TracePoint start_tp, TracePoint final_tp)
 {
     SearchingState state = SearchingState();
 
-    auto GC = GraphCreator(M);
-    auto graph = GC.getGraph();
-    auto calledFun = GC.getCalledFun();
-    auto label = GC.getLabel();
+    auto graph = Graph(M);
 
-    state.StartTPNotFound = label.find(start_tp) == label.end();
-    state.FinalTPNotFound = label.find(final_tp) == label.end();
+    auto start_v = graph.vertexFromTracePoint(start_tp);
+    auto final_v = graph.vertexFromTracePoint(final_tp);
+
+    state.StartTPNotFound = start_v == nullptr;
+    state.FinalTPNotFound = final_v == nullptr;
 
     // Early return to avoid pointless loops finding, etc.
     if (state.StartTPNotFound || state.FinalTPNotFound)
@@ -365,14 +349,11 @@ SearchingState runSearch(Module &M, TracePoint start_tp, TracePoint final_tp)
         return state;
     }
 
-    auto start_v = label[start_tp];
-    auto final_v = label[final_tp];
-
     // LoopsFinder still has to collect info about final tp reachability,
     // so we reuse it as a side effect.
     // TODO: save results in LoopsFinder and use them here
-    auto cyclesChecker = CyclesChecker(graph, calledFun);
-    auto ccStatus = cyclesChecker.check(start_v, final_v);
+    auto cyclesChecker = CyclesChecker(graph);
+    auto ccStatus = cyclesChecker.check(*start_v, *final_v);
 
     state.LoopFound = ccStatus.loop_on_trace_found;
     state.FinalTPUnreachable = ! ccStatus.reached_final_tp;
