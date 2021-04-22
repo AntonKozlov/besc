@@ -67,23 +67,9 @@ public:
 
     vector<Vertex> getAdjacentVertices(Vertex v) { return alist[v]; }
 
-    Vertex* getCalledFun(Vertex v)
-    {
-        auto to_ptr = calledFun.find(v);
-        if (to_ptr == calledFun.end())
-            return nullptr;
-        else
-            return new Vertex(to_ptr->second);
-    }
+    Vertex* getCalledFun(Vertex v) { return getVertex(v, calledFun); }
 
-    Vertex* vertexFromTracePoint(TracePoint tp)
-    {
-        auto v_ptr = label.find(tp);
-        if (v_ptr == label.end())
-            return nullptr;
-        else
-            return new Vertex(v_ptr->second);
-    }
+    Vertex* vertexFromTracePoint(TracePoint tp) { return getVertex(tp, label); }
 
     void print()
     {
@@ -157,6 +143,16 @@ private:
         auto argument     = llvm_string.str();
         argument.resize(argument.size() - 1); // remove trailing '\00'
         return TracePoint(argument);
+    }
+
+    template <class T>
+    Vertex* getVertex(T& key_, map<T, Vertex>& map_)
+    {
+        auto v_ptr = map_.find(key_);
+        if (v_ptr == map_.end())
+            return nullptr;
+        else
+            return new Vertex(v_ptr->second);
     }
 };
 
