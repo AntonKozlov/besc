@@ -114,7 +114,9 @@ public:
                 }
                 else
                 {
-                    calledFun[vertex[BB]] = vertex[&CI->getCalledFunction()->getEntryBlock()];
+                    auto cf_entryBlock = &CI->getCalledFunction()->getEntryBlock();
+                    if (auto cf_v_ptr = getVertex(cf_entryBlock, vertex))
+                        calledFun[vertex[BB]] = *cf_v_ptr;
                 }
             }
         }
