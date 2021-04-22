@@ -19,40 +19,34 @@ in_docker : .docker_image
 
 without_docker : test
 
-
-exec_files_dir = build
-
-define compile_exec_file
-$(1) = $(exec_files_dir)/$(1)
-run_$(1) = $$($(1))
-$(1)_file = $(1).cpp
-$$($(1)) : $$($(1)_file)
-	mkdir -p $(exec_files_dir)
-	g++ -O3 -Wall -std=c++17 $$($(1)_file) $(shell llvm-config --cxxflags --ldflags --libs --system-libs) -o $$($(1))
-
-endef
+blddir := build
 
 cpp_files := $(wildcard *.cpp)
-cpp_file_names := $(patsubst %.cpp,%,$(cpp_files))
 
-EXE = check_cycles hello_llvm
+CXXFLAGS=-O3 -Wall -std=c++14 $(shell llvm-config --cxxflags)
 
-check_cycles : bounded_loops.o utils.o
-$(EXE) : % : %.o
-		g++ -O3 -Wall -std=c++14 $^ $(shell llvm-config --cxxflags --ldflags --libs --system-libs) -o $@
+exe := check_cycles hellollvm split_blocks insert_tracepoints
 
-$(eval $(foreach cpp_file_name,$(cpp_file_names),$(call compile_exec_file,$(cpp_file_name))))
+$(blddir)/check_cycles : $(blddir)/bounded_loops.o $(blddir)/utils.o
 
+$(blddir)/. :
+	mkdir -p $@
+
+$(cpp_files:%.cpp=$(blddir)/%.o) : $(blddir)/%.o : %.cpp | $(blddir)/.
+	$(CXX) $(CXXFLAGS) -c -o $@ $<
+
+$(exe:%=$(blddir)/%) : $(blddir)/% : $(blddir)/%.o
+	$(CXX) $(CXXFLAGS) -o $@ $^ $(shell llvm-config --ldflags --libs --system-libs)
 
 test : $(patsubst tests/%.c,do-%,$(wildcard tests/*.c))
 
-tests/%.ll : tests/%.c $(split_blocks) $(insert_tracepoints)
+tests/%.ll : tests/%.c $(blddir)/split_blocks $(blddir)/insert_tracepoints
 	clang -Wno-implicit-function-declaration -emit-llvm -S $< -o $@
-	$(run_insert_tracepoints) $@
-	$(run_split_blocks) $@
+	./$(blddir)/insert_tracepoints $@
+	./$(blddir)/split_blocks $@
 
-test-rules = do-$(1) : tests/$(1).ll $(check_cycles)
-
+run_check_cycles := $(blddir)/check_cycles
+test-rules = do-$(1) : tests/$(1).ll $(blddir)/check_cycles
 
 # Tests that require rework due to the loop detection algo changes are commented 
 $(call test-rules,test1)
@@ -127,7 +121,7 @@ $(call test-rules,test9)
 
 
 clean :
-	sudo rm -rf $(exec_files_dir) tests/*.ll
+	sudo rm -rf $(blddir) tests/*.ll
 
 deep_clean : clean
 	docker rmi $(docker_image_name)
