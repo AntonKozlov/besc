@@ -85,6 +85,25 @@ public:
             return new Vertex(v_ptr->second);
     }
 
+    void print()
+    {
+        cout << "Graph:" << endl;
+        cout << "    AdjacencyList:" << endl;
+        for (Vertex v = 0; v < amtVertices; v++)
+        {
+            cout << "        " << v << ":";
+            for (Vertex to : alist[v])
+                cout << " " << to;
+            if (auto cf_ptr = getVertex(v, calledFun))
+                cout << " | " << *cf_ptr;
+            cout << endl;
+        }
+        cout << "    TracePoints:" << endl;
+        for (auto [tp, v] : label)
+            cout << "        " << v << " <- " << tp << endl;
+        cout << endl;
+    }
+
     void visitBasicBlock(BasicBlock& BB_)
     {
         auto *BB = &BB_;
