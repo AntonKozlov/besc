@@ -35,6 +35,12 @@ endef
 cpp_files := $(wildcard *.cpp)
 cpp_file_names := $(patsubst %.cpp,%,$(cpp_files))
 
+EXE = check_cycles hello_llvm
+
+check_cycles : bounded_loops.o utils.o
+$(EXE) : % : %.o
+		g++ -O3 -Wall -std=c++14 $^ $(shell llvm-config --cxxflags --ldflags --libs --system-libs) -o $@
+
 $(eval $(foreach cpp_file_name,$(cpp_file_names),$(call compile_exec_file,$(cpp_file_name))))
 
 
