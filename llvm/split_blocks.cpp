@@ -35,7 +35,7 @@ public:
     }
 };
 
-int main(int argc, char **argv) {
+/*int main(int argc, char **argv) {
     if (argc < 2 || 3 < argc) {
         cerr << "Usage: " << argv[0] << " <input IR file> [<output file>]\n";
         return 1;
@@ -58,4 +58,4 @@ int main(int argc, char **argv) {
     Mod->print(*out, nullptr);
 
     return 0;
-}
+}*/

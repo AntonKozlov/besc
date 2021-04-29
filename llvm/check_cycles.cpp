@@ -8,6 +8,7 @@
 #include "types.h"
 #include "bounded_loops.h"
 #include "utils.h"
+#include "split_blocks.cpp"
 
 #include <iostream>
 #include <vector>
@@ -106,6 +107,7 @@ public:
 
     void visitBasicBlock(BasicBlock& BB_)
     {
+        cout << "BB.parent.name = " << BB_.getParent()->getName().str() << endl;
         auto *BB = &BB_;
         addVertex(BB);
         for (auto I = BB->begin(); I != BB->end(); I++)
@@ -128,6 +130,7 @@ public:
                 }
                 else
                 {
+                    cout << "calledFun[BB].called.name = " << CI->getCalledFunction()->getName().str() << endl;
                     calledFun[BB] = &CI->getCalledFunction()->getEntryBlock();
                 }
             }
@@ -389,13 +392,16 @@ SearchingState runSearch(Module &M, TracePoint start_tp, TracePoint final_tp)
     runO1OptimizationPass(M);
     SearchingState state = SearchingState();
 
+    auto BS = BlocksSplitter();
+    BS.split(M);
+
     auto GC = GraphCreator(M);
     auto graph = GC.getGraph();
     auto calledFun = GC.getCalledFun();
     auto label = GC.getLabel();
     auto blockIdx = GC.getBlockIdx();
 
-    // printGraph(graph);
+    printGraph(graph, calledFun);
 
     state.StartTPNotFound = label.find(start_tp) == label.end();
     state.FinalTPNotFound = label.find(final_tp) == label.end();

@@ -2,7 +2,9 @@
 
 #include "types.h"
 
-void printGraph(Graph &graph);
+#include <map>
+
+void printGraph(Graph &graph, std::map<Vertex, Vertex> &calledFun);
 
 bool compareVertexLists(
     std::vector<Vertex> VertexList1,

@@ -25,7 +25,7 @@ cpp_files := $(wildcard *.cpp)
 
 CXXFLAGS=-O3 -Wall -std=c++14 $(shell llvm-config --cxxflags)
 
-exe := check_cycles hellollvm split_blocks insert_tracepoints
+exe := check_cycles hellollvm insert_tracepoints
 
 $(blddir)/check_cycles : $(blddir)/bounded_loops.o $(blddir)/utils.o
 
@@ -40,10 +40,10 @@ $(exe:%=$(blddir)/%) : $(blddir)/% : $(blddir)/%.o
 
 test : $(patsubst tests/%.c,do-%,$(wildcard tests/*.c))
 
-tests/%.ll : tests/%.c $(blddir)/split_blocks $(blddir)/insert_tracepoints
+tests/%.ll : tests/%.c $(blddir)/insert_tracepoints
 	clang -Wno-implicit-function-declaration -emit-llvm -S $< -o $@
 	./$(blddir)/insert_tracepoints $@
-	./$(blddir)/split_blocks $@
+	#./$(blddir)/split_blocks $@
 
 run_check_cycles := $(blddir)/check_cycles
 test-rules = do-$(1) : tests/$(1).ll $(blddir)/check_cycles
