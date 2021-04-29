@@ -5,6 +5,10 @@
 #include "llvm/IR/InstVisitor.h"
 #include "llvm/IR/BasicBlock.h"
 
+#include "types.h"
+#include "bounded_loops.h"
+#include "utils.h"
+
 #include <iostream>
 #include <vector>
 #include <set>
@@ -195,14 +199,18 @@ private:
     vector<Color> color;
     vector<Vertex> dfs_stack;
     vector<DfsStatus> status;
+    vector < vector<Vertex> > bounded_loops;
 
     Vertex final_v;
 
 public:
-    CyclesChecker(Graph& graph_, map<Vertex, Vertex>& calledFun_)
+    CyclesChecker(Graph& graph_,
+                  map<Vertex, Vertex>& calledFun_,
+                  vector < vector<Vertex> > bounded_loops_)
     {
         graph = graph_;
         calledFun = calledFun_;
+        bounded_loops = bounded_loops_;
     }
 
     DfsStatus check(Vertex start_v_, Vertex final_v_)
@@ -214,6 +222,33 @@ public:
     }
 
 private:
+    bool check_bounded_loop(Vertex cycle_entry)
+    {
+        auto entry_it = std::find(dfs_stack.rbegin(), dfs_stack.rend(), cycle_entry);
+        assert(entry_it != dfs_stack.rend());
+
+        // https://stackoverflow.com/a/2037917
+        std::vector<Vertex> loop(
+            (entry_it + 1).base(), 
+            dfs_stack.end()
+        );
+
+        // std::cout << "FOUND Loop: "; 
+        // for (auto v: loop) {
+        //     std::cout << v << " ";
+        // }
+        // std::cout << std::endl;
+
+        for (auto bounded_loop: bounded_loops) {
+            if (compareVertexLists(loop, bounded_loop)) {
+                // std::cout << ">>>> BOUNDED!!!" << std::endl;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     void clear() {
         color.assign(graph.size(), White);
         dfs_stack.clear();
@@ -252,13 +287,15 @@ private:
             if (color[to] == Grey)
             {
                 // recursion found
-                for (auto w = dfs_stack.rbegin(); *w != to; w++)
-                {
-                    status[*w].loop_on_trace_found = true;
-                    status[*w].real_loop_found = true;
+                if (!check_bounded_loop(to)) {
+                    for (auto w = dfs_stack.rbegin(); *w != to; w++)
+                    {
+                        status[*w].loop_on_trace_found = true;
+                        status[*w].real_loop_found = true;
+                    }
+                    status[to].loop_on_trace_found = true;
+                    status[to].real_loop_found = true;
                 }
-                status[to].loop_on_trace_found = true;
-                status[to].real_loop_found = true;
             }
 
             if (color[to] == Black)
@@ -300,15 +337,15 @@ private:
 
             if (color[to] == Grey)
             {
-                // You can modify that part of dfs to mark cycles and retrieve
-                // info about them
-                for (auto w = dfs_stack.rbegin(); *w != to; w++)
-                {
-                    status[*w].loop_on_trace_found = true;
-                    status[*w].real_loop_found = true;
+                if (!check_bounded_loop(to)) {
+                    for (auto w = dfs_stack.rbegin(); *w != to; w++)
+                    {
+                        status[*w].loop_on_trace_found = true;
+                        status[*w].real_loop_found = true;
+                    }
+                    status[to].loop_on_trace_found = true;
+                    status[to].real_loop_found = true;
                 }
-                status[to].loop_on_trace_found = true;
-                status[to].real_loop_found = true;
             }
 
             if (color[to] == Black)
@@ -349,12 +386,16 @@ private:
 // main function of searching loop in trace between start_tp and final_tp
 SearchingState runSearch(Module &M, TracePoint start_tp, TracePoint final_tp)
 {
+    runO1OptimizationPass(M);
     SearchingState state = SearchingState();
 
     auto GC = GraphCreator(M);
     auto graph = GC.getGraph();
     auto calledFun = GC.getCalledFun();
     auto label = GC.getLabel();
+    auto blockIdx = GC.getBlockIdx();
+
+    // printGraph(graph);
 
     state.StartTPNotFound = label.find(start_tp) == label.end();
     state.FinalTPNotFound = label.find(final_tp) == label.end();
@@ -365,13 +406,49 @@ SearchingState runSearch(Module &M, TracePoint start_tp, TracePoint final_tp)
         return state;
     }
 
+    // Iterate over all functions in the module, 
+    // extract loops and their corresponding groups of basic blocks
+    // and convert them to Vertex loops
+    vector < vector<Vertex> > bounded_loops = {};
+    for (auto &fun : M) {
+        auto block_groups = extractBlocksGroupedByLoops(fun);
+        for (auto group: block_groups) {
+            vector<Vertex> vertex_loop = {};
+            for (auto block: group) {
+                vertex_loop.push_back(blockIdx[block]);
+            }
+            bounded_loops.push_back(vertex_loop);
+        }
+        // for (auto blocks : block_groups) {
+        //     std::cout << "BLOCK GROUP" << std::endl;
+        //     llvm::outs() << "New group \n";
+        //     for (auto block : blocks) {
+        //         llvm::outs() << "start block \n";
+        //         llvm::outs() << *block << "\n";
+        //         llvm::outs() << "end block \n";
+        //     }
+        // }
+    }
+
+    // std::cout << "Loops: " << bounded_loops.size() << std::endl;
+    // for (auto loop: bounded_loops) {
+    //     std::cout << "Loop: "; 
+    //     for (auto v: loop) {
+    //         std::cout << v << " ";
+    //     }
+    //     std::cout << std::endl;
+    // }
+
+    // auto manager = llvm::AnalysisManager<llvm::Module>();
+    // auto print_pass = llvm::PrintModulePass(llvm::outs());
+    // void(print_pass.run(M, manager));
+
     auto start_v = label[start_tp];
     auto final_v = label[final_tp];
 
     // LoopsFinder still has to collect info about final tp reachability,
     // so we reuse it as a side effect.
-    // TODO: save results in LoopsFinder and use them here
-    auto cyclesChecker = CyclesChecker(graph, calledFun);
+    auto cyclesChecker = CyclesChecker(graph, calledFun, bounded_loops);
     auto ccStatus = cyclesChecker.check(start_v, final_v);
 
     state.LoopFound = ccStatus.loop_on_trace_found;
