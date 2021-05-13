@@ -1,0 +1,8 @@
+General info about fuzzing: https://www.f-secure.com/en/consulting/our-thinking/15-minute-guide-to-fuzzing
+Benchmark suite for fuzzers: https://github.com/google/fuzzbench
+Fuzzers benchmark results: https://www.fuzzbench.com/reports/sample/index.html
+Google fuzzing infrastructure: https://github.com/google/clusterfuzz (FUZZING WORKFLOW SCHEME)
+AFL: https://lcamtuf.coredump.cx/afl/
+Fuzzing techniques overview: https://www.cscjournals.org/library/manuscriptinfo.php?mc=IJCSS-1481
+AFL with grammar mutation: https://github.com/AFLplusplus/Grammar-Mutator
+Grammar fuzzer from scratch: https://www.fuzzingbook.org/html/Grammars.html
