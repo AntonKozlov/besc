@@ -1,0 +1,73 @@
+{
+  "<START>": [["<IMPORTS>", "<FUNC_DECLS>", "int main() {\n", "int a; int b;\n", "<PROGRAM>", "return 0", "<SEMICOLON>", "}"]],
+  "<IMPORTS>": [
+    ["#include<stdio.h>", "<NEWLINE>", "#include<stdlib.h>", "<NEWLINE>"]
+  ],
+  "<FUNC_DECLS>": [
+    ["<NEWLINE>",
+      "int foo", "(int ", "<PARAM>", ") {\n", "int a; int b;\n", "<PROGRAM>", "}\n",
+      "int bar", "(int ", "<PARAM>", ") {\n", "int a; int b;\n", "<PROGRAM>", "}\n"
+    ]
+  ],
+
+  "<PROGRAM>": [
+    ["<STATEMENT>", "<STATEMENT>", "<STATEMENT>", "<STATEMENT>"],
+    ["<STATEMENT>", "<STATEMENT>", "<STATEMENT>", "<STATEMENT>", "<PROGRAM>"]
+  ],
+
+  "<STATEMENT>": [
+    ["<VAR>", " = ", "<CALL>", "<SEMICOLON>"],
+    ["<PROCEDURE>", "<SEMICOLON>"],
+    ["<CALL>", "<SEMICOLON>"],
+
+    ["for (int i = ", "<NUM>", "; i < ", "<NUM>", "; i += ", "<NUM>", ") {\n", "<LOOP_BODY>","}\n"],
+    ["while (", "<VAR>", " ", "<COMP>", " ", "<NUM>", ") {\n", "<LOOP_BODY>", "}\n"],
+    ["if (", "<VAR>", " ", "<COMP>", " ", "<NUM>", ") {\n", "<PROGRAM>", "}\n"]
+  ],
+
+  "<LOOP_BODY>": [
+    ["<STATEMENT>"], ["<STATEMENT>", "<LOOP_BODY>"], ["<CONTROL_STMT>"], ["<LOOP_BODY>", "<CONTROL_STMT>"]
+  ],
+
+  "<CONTROL_STMT>": [
+    ["break",  "<SEMICOLON>"],
+    ["continue", "<SEMICOLON>"]
+  ],
+
+  "<CALL>": [
+    ["<FUNC_NAME>", "(", "<VARPARAMNUM>", ")"]
+  ],
+  "<PROCEDURE>": [
+    ["printf(' ')"]
+  ],
+
+  "<ARGS>": [
+    [], ["<VAR>", ",", "<ARGS>"],  ["<NUM>", ",", "<ARGS>"]
+  ],
+
+  "<COMP>": [
+    ["<"], [">"], ["=="], ["!="]
+  ],
+  "<VARPARAMNUM>": [
+    ["<VAR>"], ["<NUM>"], ["<PARAM>"]
+  ],
+  "<VAR>": [
+    ["a"], ["b"]
+  ],
+  "<PARAM>": [
+    ["c"]
+  ],
+  "<FUNC_NAME>": [
+    ["foo"], ["bar"], ["foobar"]
+  ],
+  "<NUM>": [
+    ["1"], ["2"], ["5"], ["10"], ["100"], ["500"], ["1000"], ["10000"]
+  ],
+
+  "<SEMICOLON>": [
+    [";", "<NEWLINE>"]
+  ],
+  "<NEWLINE>": [
+    ["\n"]
+  ]
+}
