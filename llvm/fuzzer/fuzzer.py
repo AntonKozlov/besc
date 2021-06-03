@@ -25,7 +25,7 @@ int test_read(char* filename) {
     }
 
     fclose(fp);
-    return sum;
+    return sum != 0 ? abs(sum) : 1;
 } 
 ''',
 '''
@@ -37,7 +37,7 @@ int test_write(char* filename) {
     }
 
     fclose(fp);
-    return sum;
+    return sum != 0 ? abs(sum) : 1;
 }
 '''
     ]
@@ -58,12 +58,12 @@ def create_function(number: int, size: int, files_count):
         elif (r == 1):
             # for
             body.append('for (int i = 0; i < sum; i++) {')
-            body.append(f'sum -= test_{randint(0, size - 1)}(1);')
+            body.append(f'sum -= test_{randint(0, size - 1)}(arg - 1);')
             body.append('}')
         elif (r == 2):
             # while
             body.append('while (sum > 0) {')
-            body.append(f'sum -= test_{randint(0, size - 1)}(1);')
+            body.append(f'sum -= test_{randint(0, size - 1)}(arg - 1);')
             body.append('}')
         elif (r == 3):
             # read
@@ -80,13 +80,14 @@ def create_function(number: int, size: int, files_count):
 
     body.append('printf("sum %d\\n", sum);')
     body.append('fflush(stdout);')
-    body.append('return sum;')
+    body.append('return sum != 0 ? abs(sum) : 1;')
     body.append('}')
     return body, files_count
 
 
 def create_main(size: int):
     declarations = [f'int test_{number}(int arg);' for number in range(size)]
+   
     files_count = 0
     definitions  = list()
     for number in range(size):
@@ -119,5 +120,5 @@ def generate(output: str, size: int):
         f.write('\n'.join(create_main(size)) + '\n')
         f.close()
 
-
+# output name, number of functions
 generate(sys.argv[1], int(sys.argv[2]))
