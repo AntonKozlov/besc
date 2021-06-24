@@ -1,124 +1,208 @@
 import sys
-from random import randint, random
+from random import randint
+from c_ast import *
+
+name, size = sys.argv[1], int(sys.argv[2])
+
+ctx = context(
+    {"int": valuetype("int"), "array": valuetype("int*")},
+    {
+        "sum": operation("+"),
+        "dif": operation("-"),
+        "mul": operation("*"),
+        "div": operation("/"),
+        "gt": operation(">"),
+    },
+)
 
 
-def headers():
-    return [f'#include <{lib}.h>' for lib in ['stdio', 'stdlib']]
+def headers() -> str:
+    return [f"#include <{lib}.h>" for lib in ["stdio", "stdlib"]]
 
 
-def test_functions():
-    return [
-'''
-int test_read(char* filename) {
-    FILE *fp = fopen(filename, "r");
-    int sum = 0;
-    int product = 1;
-    int number = fgetc(fp);
-    while (number != EOF) {
-        if (number != '\\n') {
-            product *= number; 
-        } else {
-            sum += product;
-            product = 1;
-        }
-        number = fgetc(fp);
-    }
+def create_function(number: int, size: int) -> block:
+    arg = ctx.variables[ctx.types["int"]][0]
+    sum = ctx.variables[ctx.types["int"]][1]
+    arr = ctx.variables[ctx.types["array"]][0]
 
-    fclose(fp);
-    return sum != 0 ? abs(sum) : 1;
-} 
-''',
-'''
-int test_write(char* filename) {
-    FILE *fp = fopen(filename, "w");
-    int sum = 0;
-    for (int i = 0; i < rand() % 1000 + 100; i++) {
-        sum += fputc(rand(), fp);
-    }
+    body = list()
+    body.extend([f'printf("func {number} arg %d\\n", arg);', "fflush(stdout);"])
+    body.append(declaration(ctx.types["int"], assignop(sum, constant(0))))
 
-    fclose(fp);
-    return sum != 0 ? abs(sum) : 1;
-}
-'''
-    ]
-
-
-def create_function(number: int, size: int, files_count):
-
-    body = [f'\nint test_{number}(int arg) {{', 'int sum = 0;', f'printf("function %d arg %d\\n", {number}, arg);', 'fflush(stdout);'] 
-
-    for i in range(size):
+    for _ in range(size):
         r = randint(0, 4)
 
-        if (r == 0):
+        if r == 0:
             # if + call
-            body.append('if (arg > 0) {')
-            body.append(f'sum += test_{randint(0, size - 1)}(arg - 1);')
-            body.append('}')
-        elif (r == 1):
+            body.append(
+                branch(
+                    binop(arg, constant(0), ctx.operations["gt"]),
+                    block(
+                        [
+                            assignop(
+                                sum,
+                                fcall(
+                                    ctx.functions[randint(0, size - 1)],
+                                    [
+                                        binop(arg, constant(1), ctx.operations["dif"]),
+                                        arr,
+                                    ],
+                                ),
+                            )
+                        ]
+                    ),
+                )
+            )
+        elif r == 1:
             # for
-            body.append('for (int i = 0; i < sum; i++) {')
-            body.append(f'sum -= test_{randint(0, size - 1)}(arg - 1);')
-            body.append('}')
-        elif (r == 2):
+            i = variable(ctx.types["int"], "i")
+            body.append(
+                forloop(
+                    binop(sum, i, ctx.operations["gt"]),
+                    block(
+                        [
+                            assignop(
+                                sum,
+                                fcall(
+                                    ctx.functions[randint(0, size - 1)],
+                                    [binop(arg, i, ctx.operations["dif"]), arr],
+                                ),
+                                ctx.operations["sum"],
+                            )
+                        ]
+                    ),
+                    declaration(ctx.types["int"], assignop(i, constant(1))),
+                    assignop(i, constant(1), ctx.operations["sum"]),
+                )
+            )
+        elif r == 2:
             # while
-            body.append('while (sum > 0) {')
-            body.append(f'sum -= test_{randint(0, size - 1)}(arg - 1);')
-            body.append('}')
-        elif (r == 3):
+            body.append(
+                whileloop(
+                    binop(arg, constant(0), ctx.operations["gt"]),
+                    block(
+                        [
+                            assignop(
+                                sum,
+                                fcall(
+                                    ctx.functions[randint(0, size - 1)],
+                                    [
+                                        binop(arg, constant(1), ctx.operations["dif"]),
+                                        arr,
+                                    ],
+                                ),
+                                ctx.operations["sum"],
+                            )
+                        ]
+                    ),
+                )
+            )
+        elif r == 3:
             # read
-            input = randint(0, files_count)
-            if (input == files_count):
-                files_count += 1
-            body.append(f'sum += test_read("{input}");')
-        elif (r == 4):
+            body.append(
+                assignop(
+                    sum,
+                    indexed(arr, constant(randint(0, size ** 2 - 1))),
+                    ctx.operations["sum"],
+                )
+            )
+        elif r == 4:
             # write
-            output = randint(0, files_count)
-            if (output == files_count):
-                files_count += 1
-            body.append(f'sum += test_write("{output}");')
+            body.append(
+                branch(
+                    binop(arg, constant(0), ctx.operations["gt"]),
+                    block(
+                        [
+                            assignop(
+                                indexed(arr, constant(randint(0, size ** 2 - 1))),
+                                fcall(
+                                    ctx.functions[randint(0, size - 1)],
+                                    [
+                                        binop(arg, constant(2), ctx.operations["div"]),
+                                        arr,
+                                    ],
+                                ),
+                                ctx.operations["sum"],
+                            )
+                        ]
+                    ),
+                )
+            )
 
-    body.append('printf("sum %d\\n", sum);')
-    body.append('fflush(stdout);')
-    body.append('return sum != 0 ? abs(sum) : 1;')
-    body.append('}')
-    return body, files_count
+    body.append(returns(sum))
+
+    return block(body)
 
 
-def create_main(size: int):
-    declarations = [f'int test_{number}(int arg);' for number in range(size)]
-   
-    files_count = 0
-    definitions  = list()
+def create_main(size: int) -> str:
+    declarations = [f"int test_{number}(int arg, int* arr);" for number in range(size)]
+
+    arg = variable(ctx.types["int"], "arg")
+    sum = variable(ctx.types["int"], "sum")
+    arr = variable(ctx.types["array"], "arr")
+
+    ctx.variables[ctx.types["int"]].extend([arg, sum])
+    ctx.variables[ctx.types["array"]].append(arr)
+
+    ctx.functions.extend(
+        [
+            func(ctx.types["int"], f"test_{number}", [arg, arr], None)
+            for number in range(size)
+        ]
+    )
+
     for number in range(size):
-        definition, files_count = create_function(number, size, files_count)
-        definitions.extend(definition)
+        ctx.functions[number].body = create_function(number, size)
 
-    for number in range(files_count):
-        with open(f'{number}', 'w') as f:
-            for _ in range(size):
-                f.write(str(random()) + '\n')
-            f.close()
+    main = func(
+        ctx.types["int"],
+        "main",
+        [],
+        block(
+            [
+                declaration(ctx.types["int"], assignop(sum, constant(0))),
+                declaration(
+                    "int",
+                    assignop(
+                        arr,
+                        constant(
+                            f"{{{', '.join([str(randint(0, size ** 2)) for _ in range(size ** 2)])}}}"
+                        ),
+                        "[] ",
+                    ),
+                ),
+            ]
+        ),
+    )
 
-    main_func = ['int main() {', 'int sum = 0;']
-    main_func.extend([f'sum += test_{number}({randint(0, size)});' for number in range(size)])
-    main_func.append('return sum;')
-    main_func.append('}')
+    main.body.body.extend(
+        [
+            assignop(
+                sum,
+                fcall(
+                    ctx.functions[randint(0, size - 1)],
+                    [constant(randint(0, size ** 2)), arr],
+                ),
+                ctx.operations["sum"],
+            )
+            for _ in range(size)
+        ]
+    )
+    main.body.body.append(returns(sum))
 
     program = list()
     program.extend(headers())
     program.extend(declarations)
-    program.extend(test_functions())
-    program.extend(definitions)
-    program.extend(main_func)
+    program.extend(map(lambda x: str(x), ctx.functions))
+    program.append(str(main))
 
-    return program
-    
+    return "\n\n".join(program)
 
-def generate(output: str, size: int):    
-    with open(f'{output}.c', 'w') as f:
-        f.write('\n'.join(create_main(size)) + '\n')
+
+def generate(output: str, size: int) -> None:
+    with open(f"{output}.c", "w") as f:
+        f.write(create_main(size))
         f.close()
 
-# output name, number of functions
-generate(sys.argv[1], int(sys.argv[2]))
+
+generate(name, size)
