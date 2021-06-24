@@ -2,10 +2,6 @@
 
 #include "types.h"
 
-#include <map>
-
-void printGraph(Graph &graph, std::map<Vertex, Vertex> &calledFun);
-
 bool compareVertexLists(
     std::vector<Vertex> VertexList1,
     std::vector<Vertex> VertexList2);

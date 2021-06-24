@@ -3,24 +3,6 @@
 #include "types.h"
 
 #include <iostream>
-#include <map>
-
-void printGraph(Graph &graph, std::map<Vertex, Vertex> &calledFun)
-{
-    std::cout << "Graph:" << std::endl;
-    for (Vertex v = 0; v < graph.size(); v++)
-    {
-        std::cout << v << ":";
-        for (Vertex to : graph[v])
-        {
-            std::cout << " " << to;
-        }
-        if (calledFun.find(v) != calledFun.end())
-            std::cout << " (" << calledFun[v] << ")";
-        std::cout << std::endl;
-    }
-    std::cout << std::endl;
-}
 
 bool compareVertexLists(
     std::vector<Vertex> VertexList1,
